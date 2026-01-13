@@ -8,7 +8,6 @@ import {
   AutoAdditionalDriver,
   AutoVehicle,
   AutoCoverageInfo,
-  AutoVehicleDeductible,
   AutoVehicleLienholder,
   AutoPriorInsurance,
   AutoAccidentOrTicket,
@@ -16,14 +15,12 @@ import {
   AUTO_DRIVER_FIELDS,
   AUTO_VEHICLE_FIELDS,
   AUTO_COVERAGE_FIELDS,
-  AUTO_DEDUCTIBLE_FIELDS,
   AUTO_LIENHOLDER_FIELDS,
   AUTO_PRIOR_INSURANCE_FIELDS,
   AUTO_ACCIDENT_TICKET_FIELDS,
   MARITAL_STATUS_OPTIONS,
   createEmptyAutoDriver,
   createEmptyAutoVehicle,
-  createEmptyAutoDeductible,
   createEmptyAutoLienholder,
   createEmptyAutoAccidentOrTicket,
   getVehicleDisplayName,
@@ -47,7 +44,6 @@ import {
   AlertCircle,
   User,
   Shield,
-  CreditCard,
   Building2,
   FileWarning,
   LucideIcon,
@@ -64,7 +60,6 @@ const AUTO_SECTION_ICONS: Record<string, LucideIcon> = {
   drivers: User,
   vehicles: Car,
   coverage: Shield,
-  deductibles: CreditCard,
   lienholders: Building2,
   priorInsurance: FileWarning,
   incidents: AlertTriangle,
@@ -219,10 +214,10 @@ export function AutoExtractionForm({
     flaggedFields += priorInsuranceStats.flagged
 
     // Array sections - typed properly
+    // Note: Deductibles are now part of vehicles, not a separate array
     const arraySections = [
       data.additionalDrivers,
       data.vehicles,
-      data.deductibles,
       data.lienholders,
       data.accidentsOrTickets,
     ] as const
@@ -458,51 +453,12 @@ export function AutoExtractionForm({
         ...prev,
         vehicles: prev.vehicles.map((vehicle, i) => {
           if (i !== index) return vehicle
-          return {
-            ...vehicle,
-            [fieldKey]: {
-              ...vehicle[fieldKey],
-              value,
-              confidence: 'high' as const,
-              flagged: false,
-            },
-          }
-        }),
-      }))
-      setHasChanges(true)
-    },
-    []
-  )
-
-  const handleAddDeductible = useCallback(() => {
-    setData((prev) => ({
-      ...prev,
-      deductibles: [...prev.deductibles, createEmptyAutoDeductible()],
-    }))
-    setHasChanges(true)
-  }, [])
-
-  const handleRemoveDeductible = useCallback((index: number) => {
-    setData((prev) => ({
-      ...prev,
-      deductibles: prev.deductibles.filter((_, i) => i !== index),
-    }))
-    setHasChanges(true)
-  }, [])
-
-  const handleDeductibleFieldChange = useCallback(
-    (index: number, fieldKey: keyof AutoVehicleDeductible, value: string) => {
-      setData((prev) => ({
-        ...prev,
-        deductibles: prev.deductibles.map((ded, i) => {
-          if (i !== index) return ded
-          const field = ded[fieldKey]
           // Handle boolean field (limitedTNCCoverage)
           if (fieldKey === 'limitedTNCCoverage') {
             return {
-              ...ded,
+              ...vehicle,
               [fieldKey]: {
-                ...field,
+                ...vehicle[fieldKey],
                 value: value === 'Yes' ? true : value === 'No' ? false : null,
                 confidence: 'high' as const,
                 flagged: false,
@@ -510,9 +466,9 @@ export function AutoExtractionForm({
             }
           }
           return {
-            ...ded,
+            ...vehicle,
             [fieldKey]: {
-              ...field,
+              ...vehicle[fieldKey],
               value,
               confidence: 'high' as const,
               flagged: false,
@@ -946,17 +902,20 @@ export function AutoExtractionForm({
           </div>
         </FormSection>
 
-        {/* 3. Vehicles/Automobiles */}
+        {/* 3. Vehicles/Automobiles (with Deductibles integrated) */}
         <FormSection
           title="Automobiles"
-          description="Vehicle information and usage"
+          description="Vehicle information, usage, and coverage options"
           icon={AUTO_SECTION_ICONS.vehicles}
           defaultOpen={true}
           stats={{
+            // All fields are now in AUTO_VEHICLE_FIELDS (includes deductibles)
             total: data.vehicles.length * Object.keys(AUTO_VEHICLE_FIELDS).length,
-            completed: data.vehicles.reduce((acc, v) => acc + Object.values(v).filter(f => f.value !== null && f.value !== '').length, 0),
+            completed: data.vehicles.reduce((acc, v) =>
+              acc + Object.values(v).filter(f => f.value !== null && f.value !== '').length, 0),
             lowConfidence: 0,
-            flagged: data.vehicles.reduce((acc, v) => acc + Object.values(v).filter(f => f.flagged).length, 0),
+            flagged: data.vehicles.reduce((acc, v) =>
+              acc + Object.values(v).filter(f => f.flagged).length, 0),
           }}
         >
           <div className="space-y-6">
@@ -973,6 +932,9 @@ export function AutoExtractionForm({
               <>
                 {data.vehicles.map((vehicle, index) => {
                   const validation = validateVehicleItem(vehicle)
+                  // Separate vehicle info fields from deductible/coverage fields
+                  const vehicleInfoKeys: (keyof AutoVehicle)[] = ['year', 'make', 'model', 'vin', 'estimatedMileage', 'vehicleUsage', 'ownership']
+                  const deductibleKeys: (keyof AutoVehicle)[] = ['comprehensiveDeductible', 'collisionDeductible', 'roadTroubleService', 'limitedTNCCoverage', 'additionalExpenseCoverage']
                   return (
                     <Card key={index} className={cn(!validation.isValid && 'border-orange-300')}>
                       <CardContent className="pt-4">
@@ -991,23 +953,44 @@ export function AutoExtractionForm({
                             Remove
                           </Button>
                         </div>
+                        {/* Vehicle Basic Info */}
                         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                          {(Object.entries(AUTO_VEHICLE_FIELDS) as [keyof AutoVehicle, AutoFieldConfig][]).map(([key, config]) =>
-                            renderField(
+                          {vehicleInfoKeys.map((key) => {
+                            const config = AUTO_VEHICLE_FIELDS[key]
+                            return renderField(
                               vehicle[key],
                               `vehicle-${index}-${key}`,
                               config,
                               (value) => handleVehicleFieldChange(index, key, value)
                             )
-                          )}
+                          })}
                         </div>
                         {!validation.isValid && (
-                          <div className="mt-3 pt-3 border-t">
+                          <div className="mt-3 pt-3 border-t border-red-200">
                             {Object.entries(validation.errors).map(([field, error]) => (
                               <p key={field} className="text-xs text-red-600">{error}</p>
                             ))}
                           </div>
                         )}
+
+                        {/* Coverage/Deductibles Section */}
+                        <div className="mt-6 pt-4 border-t border-dashed">
+                          <div className="flex items-center gap-2 mb-4">
+                            <Shield className="h-4 w-4 text-muted-foreground" />
+                            <h4 className="text-sm font-medium text-muted-foreground">Coverage</h4>
+                          </div>
+                          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                            {deductibleKeys.map((key) => {
+                              const config = AUTO_VEHICLE_FIELDS[key]
+                              return renderField(
+                                vehicle[key],
+                                `vehicle-${index}-coverage-${key}`,
+                                config,
+                                (value) => handleVehicleFieldChange(index, key, value)
+                              )
+                            })}
+                          </div>
+                        </div>
                       </CardContent>
                     </Card>
                   )
@@ -1041,72 +1024,7 @@ export function AutoExtractionForm({
           </div>
         </FormSection>
 
-        {/* 5. Deductibles by Vehicle */}
-        <FormSection
-          title="Deductibles by Vehicle"
-          description="Comprehensive and collision deductibles for each vehicle"
-          icon={AUTO_SECTION_ICONS.deductibles}
-          defaultOpen={data.deductibles.length > 0}
-          stats={{
-            total: data.deductibles.length * Object.keys(AUTO_DEDUCTIBLE_FIELDS).length,
-            completed: data.deductibles.reduce((acc, d) => acc + Object.values(d).filter(f => f.value !== null && f.value !== '').length, 0),
-            lowConfidence: 0,
-            flagged: data.deductibles.reduce((acc, d) => acc + Object.values(d).filter(f => f.flagged).length, 0),
-          }}
-        >
-          <div className="space-y-6">
-            {data.deductibles.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center border border-dashed rounded-lg bg-muted/30">
-                <AlertCircle className="w-8 h-8 text-muted-foreground mb-2" />
-                <p className="text-sm text-muted-foreground mb-4">Add deductibles for each vehicle needing comprehensive or collision coverage.</p>
-                <Button onClick={handleAddDeductible} variant="outline" size="sm">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Deductible
-                </Button>
-              </div>
-            ) : (
-              <>
-                {data.deductibles.map((deductible, index) => (
-                  <Card key={index}>
-                    <CardContent className="pt-4">
-                      <div className="flex items-center justify-between mb-4">
-                        <span className="text-sm font-medium">
-                          {deductible.vehicleReference.value || `Deductible ${index + 1}`}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRemoveDeductible(index)}
-                          className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                        >
-                          <Trash2 className="w-4 h-4 mr-1" />
-                          Remove
-                        </Button>
-                      </div>
-                      <div className="grid gap-6 sm:grid-cols-3">
-                        {(Object.entries(AUTO_DEDUCTIBLE_FIELDS) as [keyof AutoVehicleDeductible, AutoFieldConfig][]).map(([key, config]) => {
-                          const options = key === 'vehicleReference' ? vehicleOptions : config.options
-                          return renderField(
-                            deductible[key],
-                            `deductible-${index}-${key}`,
-                            { ...config, options },
-                            (value) => handleDeductibleFieldChange(index, key, value)
-                          )
-                        })}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-                <Button onClick={handleAddDeductible} variant="outline" className="w-full">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Another Deductible
-                </Button>
-              </>
-            )}
-          </div>
-        </FormSection>
-
-        {/* 6. Lienholder Information */}
+        {/* 5. Lienholder Information */}
         <FormSection
           title="Lienholder Information"
           description="Finance or lease company details by vehicle"
@@ -1171,7 +1089,7 @@ export function AutoExtractionForm({
           </div>
         </FormSection>
 
-        {/* 7. Prior Insurance */}
+        {/* 6. Prior Insurance */}
         <FormSection
           title="Prior Insurance"
           description="Current or previous insurance policy information"
@@ -1191,7 +1109,7 @@ export function AutoExtractionForm({
           </div>
         </FormSection>
 
-        {/* 8. Accidents or Tickets */}
+        {/* 7. Accidents or Tickets */}
         <FormSection
           title="Accidents or Tickets"
           description="Incidents in the last 5 years"

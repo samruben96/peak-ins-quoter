@@ -380,8 +380,10 @@ export interface AutoAdditionalDriver {
 
 /**
  * Automobile/Vehicle Information
+ * Includes vehicle details AND deductibles (per-vehicle coverage options)
  */
 export interface AutoVehicle {
+  // Vehicle identification
   year: ExtractionField;                     // REQUIRED* - 4-digit year
   make: ExtractionField;                     // REQUIRED*
   model: ExtractionField;                    // REQUIRED*
@@ -389,6 +391,13 @@ export interface AutoVehicle {
   estimatedMileage: ExtractionField;
   vehicleUsage: ExtractionField;             // pleasure, commute, business
   ownership: ExtractionField;                // owned, financed, leased
+
+  // Deductibles (per-vehicle)
+  comprehensiveDeductible: ExtractionField;  // Dollar amount or "Liability Only"
+  collisionDeductible: ExtractionField;      // Dollar amount or "Liability Only"
+  roadTroubleService: ExtractionField;       // None, $25, $50, $75, $100
+  limitedTNCCoverage: ExtractionBooleanField; // Transportation Network Company coverage (Yes/No)
+  additionalExpenseCoverage: ExtractionField; // None, $15/day, $20/day, $25/day, $30/day
 }
 
 /**
@@ -407,6 +416,8 @@ export interface AutoCoverageInfo {
 
 /**
  * Vehicle Deductibles - specific to each vehicle
+ * @deprecated Deductibles are now part of AutoVehicle interface.
+ * This interface is kept for backward compatibility with existing data.
  */
 export interface AutoVehicleDeductible {
   vehicleReference: ExtractionField;         // REQUIRED* - "Vehicle 1", "2023 Toyota Camry", etc.
@@ -453,13 +464,13 @@ export interface AutoAccidentOrTicket {
 
 /**
  * Complete Auto Extraction Result
+ * Note: Deductibles are now embedded in each vehicle in the vehicles array.
  */
 export interface AutoApiExtractionResult {
   personal: AutoPersonalInfo;
   additionalDrivers: AutoAdditionalDriver[];
   vehicles: AutoVehicle[];
   coverage: AutoCoverageInfo;
-  deductibles: AutoVehicleDeductible[];
   lienholders: AutoVehicleLienholder[];
   priorInsurance: AutoPriorInsurance;
   accidentsOrTickets: AutoAccidentOrTicket[];
@@ -703,6 +714,8 @@ export const HOME_FIELD_LABELS: Record<string, { label: string; description?: st
  * - Spouse fields: Required only if maritalStatus is 'Married' or 'Domestic Partner'
  * - Prior address fields: Required if yearsAtCurrentAddress < 5
  * - Garaging address fields: Required if garagingAddressSameAsMailing is false
+ *
+ * Note: Deductibles are now part of the vehicle object, not a separate array.
  */
 export const AUTO_REQUIRED_FIELDS: string[] = [
   // Personal
@@ -713,7 +726,7 @@ export const AUTO_REQUIRED_FIELDS: string[] = [
   'personal.rideShare',
   'personal.delivery',
 
-  // Vehicles (per vehicle)
+  // Vehicles (per vehicle) - includes vehicle info and deductibles
   'vehicles[].year',
   'vehicles[].make',
   'vehicles[].model',
@@ -728,9 +741,6 @@ export const AUTO_REQUIRED_FIELDS: string[] = [
   // Coverage
   'coverage.bodilyInjury',
   'coverage.propertyDamage',
-
-  // Deductibles (per vehicle)
-  'deductibles[].vehicleReference',
 
   // Accidents/Tickets (per incident)
   'accidentsOrTickets[].driverName',
@@ -791,7 +801,7 @@ export const AUTO_FIELD_LABELS: Record<string, { label: string; description?: st
   'additionalDrivers[].goodStudentDiscount': { label: 'Good Student Discount (GSD)' },
   'additionalDrivers[].vehicleAssigned': { label: 'Vehicle Assigned' },
 
-  // Vehicles
+  // Vehicles (includes vehicle info AND deductibles)
   'vehicles[].year': { label: 'Vehicle Year', description: 'Required' },
   'vehicles[].make': { label: 'Vehicle Make', description: 'Required' },
   'vehicles[].model': { label: 'Vehicle Model', description: 'Required' },
@@ -799,6 +809,12 @@ export const AUTO_FIELD_LABELS: Record<string, { label: string; description?: st
   'vehicles[].estimatedMileage': { label: 'Estimated Annual Mileage' },
   'vehicles[].vehicleUsage': { label: 'Vehicle Usage', description: 'Pleasure, Commute, Business' },
   'vehicles[].ownership': { label: 'Vehicle Ownership', description: 'Owned, Financed, Leased' },
+  // Vehicle deductibles (per-vehicle)
+  'vehicles[].comprehensiveDeductible': { label: 'Comprehensive Deductible', description: 'Or "Liability Only"' },
+  'vehicles[].collisionDeductible': { label: 'Collision Deductible', description: 'Or "Liability Only"' },
+  'vehicles[].roadTroubleService': { label: 'Road Trouble Service', description: 'None, $25, $50, $75, $100' },
+  'vehicles[].limitedTNCCoverage': { label: 'Limited TNC Coverage', description: 'Transportation Network Company (Uber/Lyft driver) coverage' },
+  'vehicles[].additionalExpenseCoverage': { label: 'Additional Expense Coverage', description: 'Daily rental reimbursement rate' },
 
   // Coverage
   'coverage.bodilyInjury': { label: 'Bodily Injury (BI)', description: 'Required - e.g., 250/500' },
@@ -809,14 +825,6 @@ export const AUTO_FIELD_LABELS: Record<string, { label: string; description?: st
   'coverage.towing': { label: 'Towing Coverage' },
   'coverage.rental': { label: 'Rental Reimbursement' },
   'coverage.offRoadVehicleLiability': { label: 'Off-Road Vehicle Liability', description: 'Coverage for ATVs, dirt bikes, etc.' },
-
-  // Deductibles
-  'deductibles[].vehicleReference': { label: 'Vehicle', description: 'Required' },
-  'deductibles[].comprehensiveDeductible': { label: 'Comprehensive Deductible', description: 'Or "Liability Only"' },
-  'deductibles[].collisionDeductible': { label: 'Collision Deductible', description: 'Or "Liability Only"' },
-  'deductibles[].roadTroubleService': { label: 'Road Trouble Service', description: 'None, $25, $50, $75, $100' },
-  'deductibles[].limitedTNCCoverage': { label: 'Limited TNC Coverage', description: 'Transportation Network Company (Uber/Lyft driver) coverage' },
-  'deductibles[].additionalExpenseCoverage': { label: 'Additional Expense Coverage', description: 'Daily rental reimbursement rate' },
 
   // Lienholders
   'lienholders[].vehicleReference': { label: 'Vehicle', description: 'Which vehicle' },

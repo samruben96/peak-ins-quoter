@@ -77,12 +77,14 @@
  * coverage.towing                   | coverage.towing                    | ExtractionBooleanField (pass-through)
  * coverage.rental                   | coverage.rental                    | ExtractionBooleanField (pass-through)
  *
- * ### Deductibles (AutoVehicleDeductible[] - array, identical structure)
+ * ### Vehicle Deductibles (now part of vehicles[] array)
  * API Field Path                           | UI Field Path                            | Type Conversion
  * -----------------------------------------|------------------------------------------|-----------------
- * deductibles[n].vehicleReference          | deductibles[n].vehicleReference          | ExtractionField (pass-through)
- * deductibles[n].comprehensiveDeductible   | deductibles[n].comprehensiveDeductible   | ExtractionField (pass-through)
- * deductibles[n].collisionDeductible       | deductibles[n].collisionDeductible       | ExtractionField (pass-through)
+ * vehicles[n].comprehensiveDeductible      | vehicles[n].comprehensiveDeductible      | ExtractionField (pass-through)
+ * vehicles[n].collisionDeductible          | vehicles[n].collisionDeductible          | ExtractionField (pass-through)
+ * vehicles[n].roadTroubleService           | vehicles[n].roadTroubleService           | ExtractionField (pass-through)
+ * vehicles[n].limitedTNCCoverage           | vehicles[n].limitedTNCCoverage           | ExtractionBooleanField (pass-through)
+ * vehicles[n].additionalExpenseCoverage    | vehicles[n].additionalExpenseCoverage    | ExtractionField (pass-through)
  *
  * ### Lienholders (AutoVehicleLienholder[] - array, identical structure)
  * API Field Path                    | UI Field Path                      | Type Conversion
@@ -122,7 +124,6 @@ import {
   AutoApiExtractionResult,
   AutoAdditionalDriver,
   AutoVehicle,
-  AutoVehicleDeductible,
   AutoVehicleLienholder,
   AutoAccidentOrTicket,
   AutoSpecificPersonalInfo,
@@ -550,11 +551,12 @@ export function autoApiToUiExtraction(
     })
   }
 
-  // Transform vehicles - ensure array and all fields
+  // Transform vehicles - ensure array and all fields (now includes deductibles)
   if (api.vehicles && Array.isArray(api.vehicles)) {
     result.vehicles = api.vehicles.map((vehicle: AutoVehicle, idx: number) => {
       console.log(`[Transform] autoApiToUiExtraction: processing vehicle ${idx}:`, vehicle.year?.value, vehicle.make?.value, vehicle.model?.value)
       return {
+        // Vehicle identification
         year: ensureField(vehicle.year),
         make: ensureField(vehicle.make),
         model: ensureField(vehicle.model),
@@ -562,6 +564,12 @@ export function autoApiToUiExtraction(
         estimatedMileage: ensureField(vehicle.estimatedMileage),
         vehicleUsage: ensureField(vehicle.vehicleUsage),
         ownership: ensureField(vehicle.ownership),
+        // Deductibles (per-vehicle)
+        comprehensiveDeductible: ensureField(vehicle.comprehensiveDeductible),
+        collisionDeductible: ensureField(vehicle.collisionDeductible),
+        roadTroubleService: ensureField(vehicle.roadTroubleService),
+        limitedTNCCoverage: ensureBooleanField(vehicle.limitedTNCCoverage),
+        additionalExpenseCoverage: ensureField(vehicle.additionalExpenseCoverage),
       }
     })
   }
@@ -582,20 +590,7 @@ export function autoApiToUiExtraction(
     console.log('[Transform] autoApiToUiExtraction: coverage.bodilyInjury =', result.coverage.bodilyInjury)
   }
 
-  // Transform deductibles
-  if (api.deductibles && Array.isArray(api.deductibles)) {
-    result.deductibles = api.deductibles.map((ded: AutoVehicleDeductible, idx: number) => {
-      console.log(`[Transform] autoApiToUiExtraction: processing deductible ${idx}:`, ded.vehicleReference?.value)
-      return {
-        vehicleReference: ensureField(ded.vehicleReference),
-        comprehensiveDeductible: ensureField(ded.comprehensiveDeductible),
-        collisionDeductible: ensureField(ded.collisionDeductible),
-        roadTroubleService: ensureField(ded.roadTroubleService),
-        limitedTNCCoverage: ensureBooleanField(ded.limitedTNCCoverage),
-        additionalExpenseCoverage: ensureField(ded.additionalExpenseCoverage),
-      }
-    })
-  }
+  // Note: Deductibles are now part of vehicles, no longer a separate transformation
 
   // Transform lienholders
   if (api.lienholders && Array.isArray(api.lienholders)) {
@@ -835,7 +830,6 @@ export function getAutoExtractionData(
           additionalDrivers: combined.auto.additionalDrivers || [],
           vehicles: combined.auto.vehicles || [],
           coverage: combined.auto.coverage,
-          deductibles: combined.auto.deductibles || [],
           lienholders: combined.auto.lienholders || [],
           priorInsurance: combined.auto.priorInsurance,
           accidentsOrTickets: combined.auto.accidentsOrTickets || [],

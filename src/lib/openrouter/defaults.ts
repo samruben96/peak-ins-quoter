@@ -282,6 +282,7 @@ export function createDefaultAutoPriorInsurance(): AutoPriorInsurance {
 
 /**
  * Create a complete default AutoApiExtractionResult
+ * Note: Deductibles are now embedded in each vehicle, not a separate array.
  */
 export function createDefaultAutoApiExtractionResult(): AutoApiExtractionResult {
   return {
@@ -289,7 +290,6 @@ export function createDefaultAutoApiExtractionResult(): AutoApiExtractionResult 
     additionalDrivers: [],
     vehicles: [],
     coverage: createDefaultAutoCoverageInfo(),
-    deductibles: [],
     lienholders: [],
     priorInsurance: createDefaultAutoPriorInsurance(),
     accidentsOrTickets: [],

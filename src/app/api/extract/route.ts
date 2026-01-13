@@ -192,7 +192,6 @@ export async function POST(request: NextRequest) {
               additionalDrivers: autoResult.additionalDrivers,
               vehicles: autoResult.vehicles,
               coverage: autoResult.coverage,
-              deductibles: autoResult.deductibles,
               lienholders: autoResult.lienholders,
               priorInsurance: autoResult.priorInsurance,
               accidentsOrTickets: autoResult.accidentsOrTickets,

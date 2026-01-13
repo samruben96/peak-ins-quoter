@@ -214,15 +214,22 @@ Extract these categories with their specific fields:
     // ... repeat for each additional driver
   ],
   "vehicles": [
-    // Array of automobiles to insure
+    // Array of automobiles to insure (includes deductibles per vehicle)
     {
+      // Vehicle identification
       "year": { text field - 4-digit year [REQUIRED] },
       "make": { text field - manufacturer [REQUIRED] },
       "model": { text field - model name [REQUIRED] },
       "vin": { text field - 17 character VIN [REQUIRED] },
       "estimatedMileage": { text field - annual mileage estimate },
       "vehicleUsage": { text field - Pleasure, Commute, Business, Farm },
-      "ownership": { text field - Owned, Financed, Leased }
+      "ownership": { text field - Owned, Financed, Leased },
+      // Deductibles (per-vehicle)
+      "comprehensiveDeductible": { text field - dollar amount or "Liability Only" },
+      "collisionDeductible": { text field - dollar amount or "Liability Only" },
+      "roadTroubleService": { text field - roadside assistance level (None, $25, $50, $75, $100) },
+      "limitedTNCCoverage": { boolean field - Transportation Network Company (Uber/Lyft) coverage },
+      "additionalExpenseCoverage": { text field - rental reimbursement amount (None, $15/day, $20/day, $25/day, $30/day) }
     }
     // ... repeat for each vehicle
   ],
@@ -236,18 +243,6 @@ Extract these categories with their specific fields:
     "rental": { boolean field },
     "offRoadVehicleLiability": { boolean field - ATV/off-road vehicle liability coverage }
   },
-  "deductibles": [
-    // Array of deductibles by vehicle
-    {
-      "vehicleReference": { text field - which vehicle [REQUIRED] },
-      "comprehensiveDeductible": { text field - dollar amount or "Liability Only" },
-      "collisionDeductible": { text field - dollar amount or "Liability Only" },
-      "roadTroubleService": { text field - roadside assistance level (None, $25, $50, $75, $100) },
-      "limitedTNCCoverage": { boolean field - Transportation Network Company (Uber/Lyft) coverage },
-      "additionalExpenseCoverage": { text field - rental reimbursement amount (None, $15/day, $20/day, $25/day, $30/day) }
-    }
-    // ... repeat for each vehicle
-  ],
   "lienholders": [
     // Array of lienholder info by vehicle (only for financed/leased)
     {

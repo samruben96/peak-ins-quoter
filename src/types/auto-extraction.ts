@@ -74,12 +74,15 @@ export type {
 // UI Extraction Result Type (mirrors API type for UI usage)
 // =============================================================================
 
+/**
+ * UI-friendly Auto Extraction Result
+ * Note: Deductibles are now embedded in each vehicle in the vehicles array.
+ */
 export interface AutoExtractionResult {
   personal: AutoPersonalInfo
   additionalDrivers: AutoAdditionalDriver[]
   vehicles: AutoVehicle[]
   coverage: AutoCoverageInfo
-  deductibles: AutoVehicleDeductible[]
   lienholders: AutoVehicleLienholder[]
   priorInsurance: AutoPriorInsurance
   accidentsOrTickets: AutoAccidentOrTicket[]
@@ -174,10 +177,11 @@ export const AUTO_DRIVER_FIELDS: Record<keyof AutoAdditionalDriver, AutoFieldCon
 }
 
 // =============================================================================
-// Field Configuration Maps - Vehicles
+// Field Configuration Maps - Vehicles (includes deductibles)
 // =============================================================================
 
 export const AUTO_VEHICLE_FIELDS: Record<keyof AutoVehicle, AutoFieldConfig> = {
+  // Vehicle identification
   year: { label: 'Year', inputType: 'number', required: true, placeholder: 'YYYY' },
   make: { label: 'Make', inputType: 'text', required: true, placeholder: 'e.g., Toyota' },
   model: { label: 'Model', inputType: 'text', required: true, placeholder: 'e.g., Camry' },
@@ -193,6 +197,20 @@ export const AUTO_VEHICLE_FIELDS: Record<keyof AutoVehicle, AutoFieldConfig> = {
   ]},
   ownership: { label: 'Ownership', inputType: 'select', required: false, options: [
     'Owned', 'Financed', 'Leased'
+  ]},
+  // Deductibles (per-vehicle)
+  comprehensiveDeductible: { label: 'Comprehensive Deductible', inputType: 'select', required: true, options: [
+    'Liability Only', '0', '100', '250', '500', '1000', '2500'
+  ]},
+  collisionDeductible: { label: 'Collision Deductible', inputType: 'select', required: true, options: [
+    'Liability Only', '0', '100', '250', '500', '1000', '2500'
+  ]},
+  roadTroubleService: { label: 'Road Trouble Service', inputType: 'select', required: false, options: [
+    'None', '$25', '$50', '$75', '$100'
+  ]},
+  limitedTNCCoverage: { label: 'Limited TNC Coverage', inputType: 'select', required: false, options: ['Yes', 'No'] },
+  additionalExpenseCoverage: { label: 'Additional Expense Coverage', inputType: 'select', required: false, options: [
+    'None', '$15/day', '$20/day', '$25/day', '$30/day'
   ]},
 }
 
@@ -222,9 +240,13 @@ export const AUTO_COVERAGE_FIELDS: Record<keyof AutoCoverageInfo, AutoFieldConfi
 }
 
 // =============================================================================
-// Field Configuration Maps - Deductibles
+// Field Configuration Maps - Deductibles (DEPRECATED)
 // =============================================================================
 
+/**
+ * @deprecated Deductible fields are now part of AUTO_VEHICLE_FIELDS.
+ * This constant is kept for backward compatibility only.
+ */
 export const AUTO_DEDUCTIBLE_FIELDS: Record<keyof AutoVehicleDeductible, AutoFieldConfig> = {
   vehicleReference: { label: 'Vehicle', inputType: 'text', required: true, placeholder: 'e.g., Vehicle 1 or 2023 Toyota Camry' },
   comprehensiveDeductible: { label: 'Comprehensive Deductible', inputType: 'select', required: true, options: [
@@ -314,7 +336,7 @@ export const AUTO_SECTIONS: AutoSectionConfig[] = [
   {
     key: 'vehicles',
     title: 'Vehicles',
-    description: 'Automobiles to be insured',
+    description: 'Automobiles to be insured (includes deductibles per vehicle)',
     isArray: true,
     arrayItemLabel: 'Vehicle',
     minItems: 1,
@@ -324,15 +346,6 @@ export const AUTO_SECTIONS: AutoSectionConfig[] = [
     key: 'coverage',
     title: 'Coverage Information',
     description: 'Liability limits and optional coverages',
-  },
-  {
-    key: 'deductibles',
-    title: 'Vehicle Deductibles',
-    description: 'Comprehensive and collision deductibles per vehicle',
-    isArray: true,
-    arrayItemLabel: 'Vehicle Deductibles',
-    minItems: 1,
-    maxItems: 6,
   },
   {
     key: 'lienholders',
@@ -396,6 +409,7 @@ export function createEmptyAutoDriver(): AutoAdditionalDriver {
 
 export function createEmptyAutoVehicle(): AutoVehicle {
   return {
+    // Vehicle identification
     year: createEmptyExtractionField(),
     make: createEmptyExtractionField(),
     model: createEmptyExtractionField(),
@@ -403,9 +417,19 @@ export function createEmptyAutoVehicle(): AutoVehicle {
     estimatedMileage: createEmptyExtractionField(),
     vehicleUsage: createEmptyExtractionField(),
     ownership: createEmptyExtractionField(),
+    // Deductibles (per-vehicle)
+    comprehensiveDeductible: createEmptyExtractionField(),
+    collisionDeductible: createEmptyExtractionField(),
+    roadTroubleService: createEmptyExtractionField(),
+    limitedTNCCoverage: createEmptyBooleanField(),
+    additionalExpenseCoverage: createEmptyExtractionField(),
   }
 }
 
+/**
+ * @deprecated Deductibles are now part of AutoVehicle. Use createEmptyAutoVehicle() instead.
+ * This function is kept for backward compatibility only.
+ */
 export function createEmptyAutoDeductible(): AutoVehicleDeductible {
   return {
     vehicleReference: createEmptyExtractionField(),
@@ -514,7 +538,6 @@ export function createEmptyAutoExtraction(): AutoExtractionResult {
     additionalDrivers: [],
     vehicles: [],
     coverage: createEmptyAutoCoverage(),
-    deductibles: [],
     lienholders: [],
     priorInsurance: createEmptyAutoPriorInsurance(),
     accidentsOrTickets: [],
@@ -634,7 +657,6 @@ export function apiToUiAutoExtraction(api: AutoApiExtractionResult): AutoExtract
     additionalDrivers: api.additionalDrivers,
     vehicles: api.vehicles,
     coverage: api.coverage,
-    deductibles: api.deductibles,
     lienholders: api.lienholders,
     priorInsurance: api.priorInsurance,
     accidentsOrTickets: api.accidentsOrTickets,
@@ -647,7 +669,6 @@ export function uiToApiAutoExtraction(ui: AutoExtractionResult): AutoApiExtracti
     additionalDrivers: ui.additionalDrivers,
     vehicles: ui.vehicles,
     coverage: ui.coverage,
-    deductibles: ui.deductibles,
     lienholders: ui.lienholders,
     priorInsurance: ui.priorInsurance,
     accidentsOrTickets: ui.accidentsOrTickets,

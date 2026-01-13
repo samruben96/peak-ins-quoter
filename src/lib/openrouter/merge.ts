@@ -13,7 +13,6 @@ import {
   AutoApiExtractionResult,
   AutoVehicle,
   AutoAdditionalDriver,
-  AutoVehicleDeductible,
   AutoVehicleLienholder,
   AutoAccidentOrTicket,
 } from '@/types/extraction'
@@ -151,11 +150,11 @@ function isDriverDuplicate(existing: AutoAdditionalDriver, incoming: AutoAdditio
 }
 
 /**
- * Check if two deductibles/lienholders are duplicates based on vehicle reference
+ * Check if two lienholders are duplicates based on vehicle reference
  */
-function isVehicleReferenceDuplicate(
-  existing: AutoVehicleDeductible | AutoVehicleLienholder,
-  incoming: AutoVehicleDeductible | AutoVehicleLienholder
+function isLienholderDuplicate(
+  existing: AutoVehicleLienholder,
+  incoming: AutoVehicleLienholder
 ): boolean {
   return (
     existing.vehicleReference?.value === incoming.vehicleReference?.value &&
@@ -230,23 +229,11 @@ export function mergeAutoApiExtractionResults(
       }
     }
 
-    // Merge deductibles array (dedupe by vehicle reference)
-    if (partial.deductibles && Array.isArray(partial.deductibles)) {
-      for (const deductible of partial.deductibles) {
-        const isDuplicate = result.deductibles.some(
-          existing => isVehicleReferenceDuplicate(existing, deductible)
-        )
-        if (!isDuplicate) {
-          result.deductibles.push(deductible)
-        }
-      }
-    }
-
     // Merge lienholders array (dedupe by vehicle reference)
     if (partial.lienholders && Array.isArray(partial.lienholders)) {
       for (const lienholder of partial.lienholders) {
         const isDuplicate = result.lienholders.some(
-          existing => isVehicleReferenceDuplicate(existing, lienholder)
+          existing => isLienholderDuplicate(existing, lienholder)
         )
         if (!isDuplicate) {
           result.lienholders.push(lienholder)

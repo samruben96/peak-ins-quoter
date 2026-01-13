@@ -1,6 +1,6 @@
 # Peak Quote - Development Progress Tracker
 
-> **Last Updated:** January 13, 2026 (Session 10)
+> **Last Updated:** January 13, 2026 (Session 12)
 >
 > **IMPORTANT:** This document should be updated after each development session. See CLAUDE.md for instructions.
 
@@ -15,6 +15,146 @@
 ---
 
 ## Session Log
+
+### Session: January 13, 2026 (Session 12)
+
+**Focus:** Backend - Restructure Auto Extraction to Embed Deductibles in Vehicles
+
+---
+
+#### Summary
+
+Completed the backend restructuring to move deductibles FROM a separate array INTO the vehicle object. This eliminates the vehicleReference field (which was error-prone for linking deductibles to vehicles) and simplifies the data model by keeping all per-vehicle information together.
+
+---
+
+#### Architectural Change
+
+**Before (Old Structure):**
+```typescript
+interface AutoApiExtractionResult {
+  vehicles: AutoVehicle[]           // Basic vehicle info only
+  deductibles: AutoVehicleDeductible[]  // Separate array with vehicleReference field
+}
+```
+
+**After (New Structure):**
+```typescript
+interface AutoApiExtractionResult {
+  vehicles: AutoVehicle[]           // Vehicle info + deductibles combined
+  // deductibles array REMOVED
+}
+
+interface AutoVehicle {
+  // Vehicle identification
+  year, make, model, vin, mileage, usage, ownership
+  // Deductibles (per-vehicle) - NEW
+  comprehensiveDeductible, collisionDeductible, roadTroubleService,
+  limitedTNCCoverage, additionalExpenseCoverage
+}
+```
+
+---
+
+#### Files Updated
+
+| File | Changes |
+|------|---------|
+| `/src/types/extraction.ts` | Added deductible fields to `AutoVehicle`, marked `AutoVehicleDeductible` as deprecated, removed `deductibles` from `AutoApiExtractionResult`, updated field labels |
+| `/src/types/auto-extraction.ts` | Updated `AUTO_VEHICLE_FIELDS` with deductible configs, removed deductibles section from `AUTO_SECTIONS`, updated `createEmptyAutoVehicle()`, marked `createEmptyAutoDeductible()` deprecated |
+| `/src/lib/openrouter/prompts.ts` | Updated `AUTO_EXTRACTION_PROMPT` to include deductibles in vehicle section |
+| `/src/lib/openrouter/schemas.ts` | Updated `AutoVehicleSchema` with deductible fields, marked `AutoVehicleDeductibleSchema` deprecated, removed deductibles from `AutoApiExtractionResultSchema` |
+| `/src/lib/openrouter/client.ts` | Removed `AutoVehicleDeductible` import, updated `createDefaultAutoApiExtractionResult()`, renamed deduplication function to `isLienholderDuplicate()`, removed deductibles merge section |
+| `/src/lib/openrouter/defaults.ts` | Removed `deductibles: []` from default result |
+| `/src/lib/openrouter/merge.ts` | Removed `AutoVehicleDeductible` import, renamed function, removed deductibles merge section |
+| `/src/lib/extraction/transform.ts` | Updated vehicle transformation to include deductible fields, removed deductibles transformation section, updated documentation |
+| `/src/app/api/extract/route.ts` | Removed `deductibles` from combined extraction result |
+| `/scripts/test-auto-transform.ts` | Updated test data to embed deductibles in vehicles, updated test assertions |
+
+---
+
+#### TypeScript Build Status
+
+All TypeScript compilation passes. Run `npm run type-check` to verify.
+
+---
+
+#### Breaking Change Notes
+
+- Old extraction data with separate `deductibles` arrays will need migration
+- The `AutoVehicleDeductible` interface and `createEmptyAutoDeductible()` function are deprecated but kept for backward compatibility
+- Quote validation types (`AutoQuoteData.deductibles`) remain unchanged as they serve a different purpose (carrier-specific output format)
+
+---
+
+---
+
+### Session: January 13, 2026 (Session 11)
+
+**Focus:** Auto Form UI - Move Deductibles Into Vehicle Cards
+
+---
+
+#### Summary
+
+Restructured the Auto extraction form UI to display deductibles within each vehicle card instead of as a separate section. This aligns with the backend change where deductibles are now part of the `AutoVehicle` interface.
+
+---
+
+#### Changes Made
+
+**1. Updated `/src/components/extraction/AutoExtractionForm.tsx`**
+
+- Removed separate "Deductibles by Vehicle" section
+- Each vehicle card now displays:
+  - Vehicle info fields (year, make, model, VIN, mileage, usage, ownership)
+  - A "Coverage" subsection with deductible fields (comprehensive, collision, road trouble, TNC coverage, additional expense)
+- Updated `handleVehicleFieldChange` to handle boolean field (`limitedTNCCoverage`)
+- Removed deductible-related handlers (`handleAddDeductible`, `handleRemoveDeductible`, `handleDeductibleFieldChange`)
+- Removed unused imports (`AutoVehicleDeductible`, `AUTO_DEDUCTIBLE_FIELDS`, `createEmptyAutoDeductible`, `CreditCard` icon)
+- Updated vehicle section stats calculation
+- Updated form stats to no longer reference `data.deductibles` array
+
+**2. Updated `/src/types/auto-extraction.ts`** (already updated by backend)
+
+- `AutoExtractionResult` no longer has `deductibles` array
+- `AUTO_VEHICLE_FIELDS` now includes deductible fields
+- `createEmptyAutoVehicle()` now includes deductible fields
+- `AUTO_SECTIONS` no longer has deductibles section
+
+---
+
+#### Visual Layout (Per Vehicle Card)
+
+```
+Vehicle 1 (2023 Toyota Camry)
++-- Year: [2023]
++-- Make: [Toyota]
++-- Model: [Camry]
++-- VIN: [1HGBH41JXMN109186]
++-- Est. Annual Mileage: [12000]
++-- Vehicle Usage: [Commute]
++-- Ownership: [Owned]
++-- ~~~ Coverage ~~~
++-- Comprehensive Deductible: [$500]
++-- Collision Deductible: [$500]
++-- Road Trouble Service: [None]
++-- Limited TNC Coverage: [No]
++-- Additional Expense Coverage: [None]
+```
+
+---
+
+#### Files Updated
+
+| File | Changes |
+|------|---------|
+| `/src/components/extraction/AutoExtractionForm.tsx` | Moved deductibles into vehicle cards, removed separate deductibles section |
+| `/src/types/auto-extraction.ts` | (backend already updated) Deductibles now part of vehicles |
+
+---
+
+---
 
 ### Session: January 13, 2026 (Session 10)
 

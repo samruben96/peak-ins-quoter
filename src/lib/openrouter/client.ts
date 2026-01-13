@@ -15,7 +15,6 @@ import {
   AutoAdditionalDriver,
   AutoVehicle,
   AutoCoverageInfo,
-  AutoVehicleDeductible,
   AutoVehicleLienholder,
   AutoPriorInsurance,
   AutoAccidentOrTicket,
@@ -546,6 +545,7 @@ function createDefaultAutoPriorInsurance(): AutoPriorInsurance {
 
 /**
  * Create a complete default AutoApiExtractionResult
+ * Note: Deductibles are now embedded in each vehicle, not a separate array.
  */
 export function createDefaultAutoApiExtractionResult(): AutoApiExtractionResult {
   return {
@@ -553,7 +553,6 @@ export function createDefaultAutoApiExtractionResult(): AutoApiExtractionResult 
     additionalDrivers: [],
     vehicles: [],
     coverage: createDefaultAutoCoverageInfo(),
-    deductibles: [],
     lienholders: [],
     priorInsurance: createDefaultAutoPriorInsurance(),
     accidentsOrTickets: [],
@@ -761,11 +760,11 @@ function isDriverDuplicate(existing: AutoAdditionalDriver, incoming: AutoAdditio
 }
 
 /**
- * Check if two deductibles/lienholders are duplicates based on vehicle reference
+ * Check if two lienholders are duplicates based on vehicle reference
  */
-function isVehicleReferenceDuplicate(
-  existing: AutoVehicleDeductible | AutoVehicleLienholder,
-  incoming: AutoVehicleDeductible | AutoVehicleLienholder
+function isLienholderDuplicate(
+  existing: AutoVehicleLienholder,
+  incoming: AutoVehicleLienholder
 ): boolean {
   return (
     existing.vehicleReference?.value === incoming.vehicleReference?.value &&
@@ -836,20 +835,10 @@ function mergeAutoApiExtractionResults(
       }
     }
 
-    // Merge deductibles array (dedupe by vehicle reference)
-    if (partial.deductibles && Array.isArray(partial.deductibles)) {
-      for (const deductible of partial.deductibles) {
-        const isDuplicate = result.deductibles.some(existing => isVehicleReferenceDuplicate(existing, deductible))
-        if (!isDuplicate) {
-          result.deductibles.push(deductible)
-        }
-      }
-    }
-
     // Merge lienholders array (dedupe by vehicle reference)
     if (partial.lienholders && Array.isArray(partial.lienholders)) {
       for (const lienholder of partial.lienholders) {
-        const isDuplicate = result.lienholders.some(existing => isVehicleReferenceDuplicate(existing, lienholder))
+        const isDuplicate = result.lienholders.some(existing => isLienholderDuplicate(existing, lienholder))
         if (!isDuplicate) {
           result.lienholders.push(lienholder)
         }

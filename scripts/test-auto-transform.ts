@@ -67,6 +67,7 @@ const sampleApiData: AutoApiExtractionResult = {
   ],
   vehicles: [
     {
+      // Vehicle info
       year: { value: '2022', confidence: 'high', flagged: false },
       make: { value: 'Toyota', confidence: 'high', flagged: false },
       model: { value: 'Camry', confidence: 'high', flagged: false },
@@ -74,8 +75,15 @@ const sampleApiData: AutoApiExtractionResult = {
       estimatedMileage: { value: '12000', confidence: 'medium', flagged: false },
       vehicleUsage: { value: 'Commute', confidence: 'high', flagged: false },
       ownership: { value: 'Financed', confidence: 'high', flagged: false },
+      // Deductibles (per-vehicle)
+      comprehensiveDeductible: { value: '500', confidence: 'high', flagged: false },
+      collisionDeductible: { value: '500', confidence: 'high', flagged: false },
+      roadTroubleService: { value: '$50', confidence: 'high', flagged: false },
+      limitedTNCCoverage: { value: false, confidence: 'high', flagged: false },
+      additionalExpenseCoverage: { value: '$25/day', confidence: 'high', flagged: false },
     },
     {
+      // Vehicle info
       year: { value: '2020', confidence: 'high', flagged: false },
       make: { value: 'Honda', confidence: 'high', flagged: false },
       model: { value: 'Civic', confidence: 'high', flagged: false },
@@ -83,6 +91,12 @@ const sampleApiData: AutoApiExtractionResult = {
       estimatedMileage: { value: '8000', confidence: 'medium', flagged: false },
       vehicleUsage: { value: 'Pleasure', confidence: 'high', flagged: false },
       ownership: { value: 'Owned', confidence: 'high', flagged: false },
+      // Deductibles (per-vehicle)
+      comprehensiveDeductible: { value: '1000', confidence: 'high', flagged: false },
+      collisionDeductible: { value: '1000', confidence: 'high', flagged: false },
+      roadTroubleService: { value: 'None', confidence: 'high', flagged: false },
+      limitedTNCCoverage: { value: false, confidence: 'high', flagged: false },
+      additionalExpenseCoverage: { value: 'None', confidence: 'high', flagged: false },
     },
   ],
   coverage: {
@@ -95,24 +109,7 @@ const sampleApiData: AutoApiExtractionResult = {
     rental: { value: true, confidence: 'high', flagged: false },
     offRoadVehicleLiability: { value: false, confidence: 'high', flagged: false },
   },
-  deductibles: [
-    {
-      vehicleReference: { value: '2022 Toyota Camry', confidence: 'high', flagged: false },
-      comprehensiveDeductible: { value: '500', confidence: 'high', flagged: false },
-      collisionDeductible: { value: '500', confidence: 'high', flagged: false },
-      roadTroubleService: { value: '$50', confidence: 'high', flagged: false },
-      limitedTNCCoverage: { value: false, confidence: 'high', flagged: false },
-      additionalExpenseCoverage: { value: '$25/day', confidence: 'high', flagged: false },
-    },
-    {
-      vehicleReference: { value: '2020 Honda Civic', confidence: 'high', flagged: false },
-      comprehensiveDeductible: { value: '1000', confidence: 'high', flagged: false },
-      collisionDeductible: { value: '1000', confidence: 'high', flagged: false },
-      roadTroubleService: { value: 'None', confidence: 'high', flagged: false },
-      limitedTNCCoverage: { value: false, confidence: 'high', flagged: false },
-      additionalExpenseCoverage: { value: 'None', confidence: 'high', flagged: false },
-    },
-  ],
+  // Note: deductibles are now part of vehicles, not a separate array
   lienholders: [
     {
       vehicleReference: { value: '2022 Toyota Camry', confidence: 'high', flagged: false },
@@ -157,23 +154,23 @@ console.log(`   Result: ${detectedType === 'auto' ? 'PASS' : 'FAIL'}`)
 console.log('\n2. Testing autoApiToUiExtraction...')
 const uiResult = autoApiToUiExtraction(sampleApiData)
 
-// Check structure
+// Check structure (note: deductibles are now part of vehicles, not a separate array)
 const structureChecks = [
   { name: 'personal exists', check: () => !!uiResult.personal },
   { name: 'additionalDrivers is array', check: () => Array.isArray(uiResult.additionalDrivers) },
   { name: 'vehicles is array', check: () => Array.isArray(uiResult.vehicles) },
   { name: 'coverage exists', check: () => !!uiResult.coverage },
-  { name: 'deductibles is array', check: () => Array.isArray(uiResult.deductibles) },
   { name: 'lienholders is array', check: () => Array.isArray(uiResult.lienholders) },
   { name: 'priorInsurance exists', check: () => !!uiResult.priorInsurance },
   { name: 'accidentsOrTickets is array', check: () => Array.isArray(uiResult.accidentsOrTickets) },
+  { name: 'vehicles[0] has deductible fields', check: () => uiResult.vehicles[0] && 'comprehensiveDeductible' in uiResult.vehicles[0] },
 ]
 
 structureChecks.forEach(({ name, check }) => {
   console.log(`   ${name}: ${check() ? 'PASS' : 'FAIL'}`)
 })
 
-// Test 3: Value preservation
+// Test 3: Value preservation (note: deductibles are now in vehicles)
 console.log('\n3. Testing value preservation...')
 const valueChecks = [
   { name: 'personal.ownerFirstName.value', expected: 'John', actual: uiResult.personal.ownerFirstName.value },
@@ -183,7 +180,8 @@ const valueChecks = [
   { name: 'vehicles[0].make.value', expected: 'Toyota', actual: uiResult.vehicles[0]?.make.value },
   { name: 'vehicles.length', expected: 2, actual: uiResult.vehicles.length },
   { name: 'coverage.bodilyInjury.value', expected: '250/500', actual: uiResult.coverage.bodilyInjury.value },
-  { name: 'deductibles.length', expected: 2, actual: uiResult.deductibles.length },
+  { name: 'vehicles[0].comprehensiveDeductible.value', expected: '500', actual: uiResult.vehicles[0]?.comprehensiveDeductible.value },
+  { name: 'vehicles[1].collisionDeductible.value', expected: '1000', actual: uiResult.vehicles[1]?.collisionDeductible.value },
   { name: 'lienholders[0].lienholderName.value', expected: 'Toyota Financial Services', actual: uiResult.lienholders[0]?.lienholderName.value },
   { name: 'priorInsurance.insuranceCompany.value', expected: 'State Farm', actual: uiResult.priorInsurance.insuranceCompany.value },
   { name: 'accidentsOrTickets[0].type.value', expected: 'Speeding Ticket', actual: uiResult.accidentsOrTickets[0]?.type.value },
@@ -226,14 +224,13 @@ const wrapperResult = getAutoExtractionData(sampleApiData)
 console.log(`   Returns non-null: ${wrapperResult !== null ? 'PASS' : 'FAIL'}`)
 console.log(`   Same structure as direct: ${JSON.stringify(wrapperResult?.personal.ownerFirstName) === JSON.stringify(uiResult.personal.ownerFirstName) ? 'PASS' : 'FAIL'}`)
 
-// Test 7: Empty/missing data handling
+// Test 7: Empty/missing data handling (note: deductibles are now part of vehicles)
 console.log('\n7. Testing empty data handling...')
 const emptyApiData: AutoApiExtractionResult = {
   personal: {} as any,
   additionalDrivers: [],
   vehicles: [],
   coverage: {} as any,
-  deductibles: [],
   lienholders: [],
   priorInsurance: {} as any,
   accidentsOrTickets: [],

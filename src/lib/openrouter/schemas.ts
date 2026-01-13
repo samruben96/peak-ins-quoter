@@ -243,9 +243,10 @@ export const AutoAdditionalDriverSchema = z.object({
 })
 
 /**
- * Schema for AutoVehicle
+ * Schema for AutoVehicle (includes deductibles per vehicle)
  */
 export const AutoVehicleSchema = z.object({
+  // Vehicle identification
   year: ExtractionFieldSchema,
   make: ExtractionFieldSchema,
   model: ExtractionFieldSchema,
@@ -253,6 +254,12 @@ export const AutoVehicleSchema = z.object({
   estimatedMileage: ExtractionFieldSchema,
   vehicleUsage: ExtractionFieldSchema,
   ownership: ExtractionFieldSchema,
+  // Deductibles (per-vehicle)
+  comprehensiveDeductible: ExtractionFieldSchema,
+  collisionDeductible: ExtractionFieldSchema,
+  roadTroubleService: ExtractionFieldSchema,
+  limitedTNCCoverage: ExtractionBooleanFieldSchema,
+  additionalExpenseCoverage: ExtractionFieldSchema,
 })
 
 /**
@@ -271,6 +278,8 @@ export const AutoCoverageInfoSchema = z.object({
 
 /**
  * Schema for AutoVehicleDeductible
+ * @deprecated Deductibles are now part of AutoVehicleSchema.
+ * This schema is kept for backward compatibility only.
  */
 export const AutoVehicleDeductibleSchema = z.object({
   vehicleReference: ExtractionFieldSchema,
@@ -317,13 +326,13 @@ export const AutoAccidentOrTicketSchema = z.object({
 
 /**
  * Complete schema for AutoApiExtractionResult
+ * Note: Deductibles are now embedded in each vehicle in the vehicles array.
  */
 export const AutoApiExtractionResultSchema = z.object({
   personal: AutoPersonalInfoSchema,
   additionalDrivers: z.array(AutoAdditionalDriverSchema),
   vehicles: z.array(AutoVehicleSchema),
   coverage: AutoCoverageInfoSchema,
-  deductibles: z.array(AutoVehicleDeductibleSchema),
   lienholders: z.array(AutoVehicleLienholderSchema),
   priorInsurance: AutoPriorInsuranceSchema,
   accidentsOrTickets: z.array(AutoAccidentOrTicketSchema),
