@@ -1,6 +1,6 @@
 # Peak Quote - Development Progress Tracker
 
-> **Last Updated:** January 13, 2026 (Session 8)
+> **Last Updated:** January 13, 2026 (Session 10)
 >
 > **IMPORTANT:** This document should be updated after each development session. See CLAUDE.md for instructions.
 
@@ -15,6 +15,228 @@
 ---
 
 ## Session Log
+
+### Session: January 13, 2026 (Session 10)
+
+**Focus:** Fix "Home & Auto" Combined Extraction - Auto-Specific Personal Fields Missing
+
+---
+
+#### Problem Identified
+
+When user selects "Home & Auto" (both) quote type, the Auto-specific personal fields were being lost during extraction and data transformation.
+
+**Root Cause:** The `CombinedExtractionData` type was designed to share personal info between Home and Auto, but Auto has many personal fields that Home doesn't need:
+
+- `effectiveDate` (policy effective date)
+- `maritalStatus`
+- `garagingAddressSameAsMailing`, `garagingStreetAddress`, `garagingCity`, `garagingState`, `garagingZipCode`
+- `ownerDriversLicense`, `ownerLicenseState`
+- `spouseDriversLicense`, `spouseLicenseState`
+- `ownerOccupation`, `spouseOccupation`
+- `ownerEducation`, `spouseEducation`
+- `rideShare`, `delivery`
+
+The extraction API was extracting these correctly from Auto, but then discarding them when creating the combined result because the `CombinedExtractionData.auto` property was typed as `Omit<AutoApiExtractionResult, 'personal'>`, which excluded the entire personal section.
+
+---
+
+#### Solution Implemented
+
+**1. Created New Type: `AutoSpecificPersonalInfo`**
+
+Added a new interface in `/src/types/extraction.ts` to capture Auto-specific personal fields that aren't shared with Home:
+
+```typescript
+export interface AutoSpecificPersonalInfo {
+  effectiveDate: ExtractionField;
+  maritalStatus: ExtractionField;
+  garagingAddressSameAsMailing: ExtractionBooleanField;
+  garagingStreetAddress: ExtractionField;
+  garagingCity: ExtractionField;
+  garagingState: ExtractionField;
+  garagingZipCode: ExtractionField;
+  ownerDriversLicense: ExtractionField;
+  ownerLicenseState: ExtractionField;
+  spouseDriversLicense: ExtractionField;
+  spouseLicenseState: ExtractionField;
+  ownerOccupation: ExtractionField;
+  spouseOccupation: ExtractionField;
+  ownerEducation: ExtractionField;
+  spouseEducation: ExtractionField;
+  rideShare: ExtractionBooleanField;
+  delivery: ExtractionBooleanField;
+}
+```
+
+**2. Updated `CombinedExtractionData` Interface**
+
+Added the `autoPersonal` property to the combined data structure:
+
+```typescript
+export interface CombinedExtractionData {
+  shared: SharedPersonalInfo;
+  autoPersonal: AutoSpecificPersonalInfo;  // NEW
+  home: Omit<HomeApiExtractionResult, 'personal'> | null;
+  auto: Omit<AutoApiExtractionResult, 'personal'> | null;
+  quoteType: 'home' | 'auto' | 'both';
+}
+```
+
+**3. Updated API Route**
+
+Modified `/src/app/api/extract/route.ts` to populate `autoPersonal` from the Auto extraction result:
+
+```typescript
+case 'both':
+  const [homeResult, autoResult] = await Promise.all([...])
+
+  extractedData = {
+    shared: { /* shared fields from homeResult */ },
+    autoPersonal: {
+      effectiveDate: autoResult.personal.effectiveDate,
+      maritalStatus: autoResult.personal.maritalStatus,
+      // ... all 17 Auto-specific fields
+    },
+    home: { /* home-specific sections */ },
+    auto: { /* auto-specific sections (excluding personal) */ },
+    quoteType: 'both',
+  }
+```
+
+**4. Updated Data Transformation**
+
+Modified `/src/lib/extraction/transform.ts` in `getAutoExtractionData()` to use `autoPersonal` when reconstructing Auto data from combined format:
+
+```typescript
+case 'both':
+  const combined = data as CombinedExtractionData
+  const autoPersonal = combined.autoPersonal || {}
+
+  return autoApiToUiExtraction({
+    personal: {
+      // Shared fields from combined.shared
+      ownerFirstName: combined.shared.ownerFirstName,
+      // ...
+      // Auto-specific fields from autoPersonal (with fallback for backward compatibility)
+      effectiveDate: autoPersonal?.effectiveDate || createEmptyAutoField(),
+      maritalStatus: autoPersonal?.maritalStatus || createEmptyAutoField(),
+      // ...
+    },
+    // ... rest of auto data
+  })
+```
+
+---
+
+#### Files Updated
+
+| File | Changes |
+|------|---------|
+| `/src/types/extraction.ts` | Added `AutoSpecificPersonalInfo` interface, updated `CombinedExtractionData` |
+| `/src/types/index.ts` | Added export for `AutoSpecificPersonalInfo` |
+| `/src/app/api/extract/route.ts` | Populated `autoPersonal` in combined extraction |
+| `/src/lib/extraction/transform.ts` | Use `autoPersonal` when reconstructing Auto data |
+
+---
+
+#### Backward Compatibility
+
+The transform function includes fallback logic (`autoPersonal?.field || createEmptyAutoField()`) to handle older combined extractions that don't have the `autoPersonal` property. These older extractions will show empty defaults for the Auto-specific personal fields, but the UI will still render correctly.
+
+---
+
+#### Type Validation
+
+All TypeScript type checks pass: `npm run type-check`
+
+Production build succeeds: `npm run build`
+
+---
+
+---
+
+### Session: January 13, 2026 (Session 9)
+
+**Focus:** Fix "Home & Auto" Quote Type - Auto Fields Not Showing on Review Page
+
+---
+
+#### Problem Identified
+
+When user selects "Home & Auto" on the upload page and proceeds to the review page, only Home fields were showing - Auto fields were missing.
+
+**Root Cause:** The `insurance_type` from the database was NOT being passed through to the review page components:
+
+1. `ReviewPage` (server component) fetched `extraction.insurance_type` but didn't pass it
+2. `ReviewPageClient` didn't receive or use the insurance type
+3. `ExtractionReview` tried to detect the quote type from data structure instead of using the stored value
+4. A redundant `QuoteTypeSelector` was shown on the review page (user already selected type at upload)
+
+---
+
+#### Solution Implemented
+
+**1. Pass `insurance_type` from Server to Client**
+
+Updated `/src/app/(protected)/review/[id]/page.tsx`:
+- Now passes `insuranceType={extraction.insurance_type || 'home'}` to `ReviewPageClient`
+
+**2. Updated ReviewPageClient**
+
+Updated `/src/app/(protected)/review/[id]/review-page-client.tsx`:
+- Added `insuranceType: InsuranceType` to props interface
+- Added `insuranceTypeToQuoteType()` helper function to map InsuranceType -> QuoteType
+- Removed `useState` and `useCallback` for quote type selection (no longer needed)
+- Passes `quoteType` prop to `ExtractionReview`
+- Removed disabled state on "Proceed to Quote" button (always enabled now)
+
+**3. Simplified ExtractionReview**
+
+Updated `/src/components/extraction/ExtractionReview.tsx`:
+- Changed `quoteType` from internal state to required prop
+- Removed `onQuoteTypeChange` callback prop (no longer needed)
+- Removed `QuoteTypeSelector` component from render
+- Removed auto-detection logic (`detectExtractionType`, `suggestQuoteType`)
+- Removed unused imports (`useMemo`, detection functions)
+- Now directly uses the `quoteType` prop to determine which form(s) to render
+
+---
+
+#### Files Updated
+
+| File | Changes |
+|------|---------|
+| `/src/app/(protected)/review/[id]/page.tsx` | Pass `insuranceType` to `ReviewPageClient` |
+| `/src/app/(protected)/review/[id]/review-page-client.tsx` | Accept `insuranceType` prop, convert to `quoteType`, pass to `ExtractionReview`, remove state management |
+| `/src/components/extraction/ExtractionReview.tsx` | Accept `quoteType` as required prop, remove `QuoteTypeSelector`, remove detection logic |
+
+---
+
+#### Expected Behavior (Now Fixed)
+
+**Upload Page:**
+1. User selects file
+2. User selects insurance type: Home, Auto, or Home & Auto (stored as 'home', 'auto', 'both')
+3. User clicks "Upload & Extract"
+4. System extracts data based on selected type
+
+**Review Page:**
+1. No quote type selector shown (already decided at upload)
+2. For 'home': Shows `HomeExtractionForm` only
+3. For 'auto': Shows `AutoExtractionForm` only
+4. For 'both': Shows tabbed interface with Home and Auto tabs
+5. "Proceed to Quote" button always enabled
+
+---
+
+#### Type Validation
+
+All TypeScript type checks pass: `npm run type-check`
+
+---
+
+---
 
 ### Session: January 13, 2026 (Session 8)
 

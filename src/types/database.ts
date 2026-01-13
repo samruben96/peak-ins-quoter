@@ -159,19 +159,24 @@ export function isAutoApiExtractionResult(data: ExtractedDataType): data is Auto
 
 /**
  * Type guard to check if extracted data is Combined API format
+ * CombinedExtractionData has 'shared' property (API format)
+ * CombinedUiExtractionData does NOT have 'shared' property (UI format)
  */
 export function isCombinedExtractionData(data: ExtractedDataType): data is CombinedExtractionData {
   if (!data || typeof data !== 'object') return false
-  return 'shared' in data && 'quoteType' in data && (data as CombinedExtractionData).quoteType !== 'both'
+  // CombinedExtractionData always has 'shared' property - this distinguishes it from CombinedUiExtractionData
+  return 'shared' in data && 'quoteType' in data
 }
 
 /**
  * Type guard to check if extracted data is Combined UI format
+ * CombinedUiExtractionData does NOT have 'shared' property - this distinguishes it from CombinedExtractionData
  */
 export function isCombinedUiExtractionData(data: ExtractedDataType): data is CombinedUiExtractionData {
   if (!data || typeof data !== 'object') return false
   const combined = data as CombinedUiExtractionData
-  return 'quoteType' in data && combined.quoteType === 'both' && 'home' in data && 'auto' in data
+  // Must have quoteType='both', 'home', 'auto', but NOT 'shared' (which would indicate API format)
+  return 'quoteType' in data && combined.quoteType === 'both' && 'home' in data && 'auto' in data && !('shared' in data)
 }
 
 /**

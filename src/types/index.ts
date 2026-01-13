@@ -5,6 +5,7 @@ export type {
   ExtractionNumberField,
   // Shared
   SharedPersonalInfo,
+  AutoSpecificPersonalInfo,
   // Home types
   HomePersonalInfo,
   HomePropertyInfo,

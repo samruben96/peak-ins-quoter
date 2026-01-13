@@ -138,7 +138,8 @@ export async function POST(request: NextRequest) {
           ])
 
           // Create combined result with shared personal info
-          // Use home personal info as the source of truth for shared fields
+          // Use home personal info as the source of truth for shared fields,
+          // but include auto-specific personal fields from the auto extraction
           extractedData = {
             shared: {
               ownerFirstName: homeResult.personal.firstName,
@@ -158,6 +159,26 @@ export async function POST(request: NextRequest) {
               yearsAtCurrentAddress: homeResult.personal.yearsAtCurrentAddress,
               phone: homeResult.personal.phone,
               email: homeResult.personal.email,
+            },
+            // Auto-specific personal fields stored separately at top level
+            autoPersonal: {
+              effectiveDate: autoResult.personal.effectiveDate,
+              maritalStatus: autoResult.personal.maritalStatus,
+              garagingAddressSameAsMailing: autoResult.personal.garagingAddressSameAsMailing,
+              garagingStreetAddress: autoResult.personal.garagingStreetAddress,
+              garagingCity: autoResult.personal.garagingCity,
+              garagingState: autoResult.personal.garagingState,
+              garagingZipCode: autoResult.personal.garagingZipCode,
+              ownerDriversLicense: autoResult.personal.ownerDriversLicense,
+              ownerLicenseState: autoResult.personal.ownerLicenseState,
+              spouseDriversLicense: autoResult.personal.spouseDriversLicense,
+              spouseLicenseState: autoResult.personal.spouseLicenseState,
+              ownerOccupation: autoResult.personal.ownerOccupation,
+              spouseOccupation: autoResult.personal.spouseOccupation,
+              ownerEducation: autoResult.personal.ownerEducation,
+              spouseEducation: autoResult.personal.spouseEducation,
+              rideShare: autoResult.personal.rideShare,
+              delivery: autoResult.personal.delivery,
             },
             home: {
               property: homeResult.property,

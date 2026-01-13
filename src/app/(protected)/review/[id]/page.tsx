@@ -110,6 +110,7 @@ export default async function ReviewPage({ params }: ReviewPageProps) {
           <ReviewPageClient
             extractionId={extraction.id}
             extractedData={extraction.extracted_data}
+            insuranceType={extraction.insurance_type || 'home'}
           />
         ) : (
           <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed bg-background py-20 sm:py-24 text-center px-6">

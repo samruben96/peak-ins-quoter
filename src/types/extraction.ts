@@ -88,6 +88,41 @@ export interface SharedPersonalInfo {
   email: ExtractionField;
 }
 
+/**
+ * Auto-specific personal fields that are NOT shared with Home insurance
+ * These are stored separately in CombinedExtractionData when quoteType is 'both'
+ */
+export interface AutoSpecificPersonalInfo {
+  // Policy effective date
+  effectiveDate: ExtractionField;            // REQUIRED* - Policy effective date, Format: YYYY-MM-DD
+
+  // Marital status
+  maritalStatus: ExtractionField;            // REQUIRED* - Single, Married, Divorced, Widowed, Domestic Partner
+
+  // Garaging address (conditional: only if different from mailing)
+  garagingAddressSameAsMailing: ExtractionBooleanField; // REQUIRED* - Is garaging address same as mailing?
+  garagingStreetAddress: ExtractionField;    // Conditional: Only if garagingAddressSameAsMailing is false
+  garagingCity: ExtractionField;             // Conditional: Only if garagingAddressSameAsMailing is false
+  garagingState: ExtractionField;            // Conditional: Only if garagingAddressSameAsMailing is false
+  garagingZipCode: ExtractionField;          // Conditional: Only if garagingAddressSameAsMailing is false
+
+  // Driver's license info
+  ownerDriversLicense: ExtractionField;      // REQUIRED* - License number
+  ownerLicenseState: ExtractionField;        // 2-letter abbreviation
+  spouseDriversLicense: ExtractionField;     // Conditional: Only if maritalStatus is Married/Domestic Partner
+  spouseLicenseState: ExtractionField;       // Conditional: Only if maritalStatus is Married/Domestic Partner
+
+  // Employment/Education
+  ownerOccupation: ExtractionField;
+  spouseOccupation: ExtractionField;         // Conditional: Only if maritalStatus is Married/Domestic Partner
+  ownerEducation: ExtractionField;           // High School, Some College, Bachelor's, etc.
+  spouseEducation: ExtractionField;          // Conditional: Only if maritalStatus is Married/Domestic Partner
+
+  // Commercial usage
+  rideShare: ExtractionBooleanField;         // REQUIRED* - Uber, Lyft, etc.
+  delivery: ExtractionBooleanField;          // REQUIRED* - DoorDash, Instacart, etc.
+}
+
 // ============================================================================
 // Home Insurance Field Categories
 // ============================================================================
@@ -441,6 +476,8 @@ export interface AutoApiExtractionResult {
 export interface CombinedExtractionData {
   /** Shared personal info (collected once, used by both) */
   shared: SharedPersonalInfo;
+  /** Auto-specific personal fields (driver's license, occupation, etc.) */
+  autoPersonal: AutoSpecificPersonalInfo;
   /** Home-specific extraction data (null if auto-only) */
   home: Omit<HomeApiExtractionResult, 'personal'> | null;
   /** Auto-specific extraction data (null if home-only) */

@@ -1,16 +1,14 @@
 'use client'
 
-import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useState, useCallback } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { HomeExtractionForm } from './HomeExtractionForm'
 import { AutoExtractionForm } from './AutoExtractionForm'
-import { QuoteTypeSelector, QuoteType } from './QuoteTypeSelector'
+import { QuoteType } from './QuoteTypeSelector'
 import { Home, Car } from 'lucide-react'
 import {
-  detectExtractionType,
   getHomeExtractionData,
   getAutoExtractionData,
-  suggestQuoteType,
 } from '@/lib/extraction/transform'
 import { HomeExtractionResult, createEmptyHomeExtraction } from '@/types/home-extraction'
 import { AutoExtractionResult, createEmptyAutoExtraction } from '@/types/auto-extraction'
@@ -28,8 +26,12 @@ interface ExtractionReviewProps {
    * - null (empty/pending extraction)
    */
   initialData: ExtractedDataType
+  /**
+   * The quote type selected by the user during upload.
+   * This determines which form(s) to display.
+   */
+  quoteType: QuoteType
   className?: string
-  onQuoteTypeChange?: (quoteType: QuoteType) => void
 }
 
 /**
@@ -39,54 +41,22 @@ interface ExtractionReviewProps {
  * Supports Home, Auto, and combined Home+Auto quote types.
  *
  * Features:
- * - Auto-detects the quote type from extraction data
- * - Allows manual quote type selection/override
+ * - Uses the quote type selected during upload (no re-selection needed)
  * - Transforms legacy data formats to new structured formats
  * - Provides tabbed interface for combined Home+Auto quotes
  */
 export function ExtractionReview({
   extractionId,
   initialData,
+  quoteType,
   className,
-  onQuoteTypeChange,
 }: ExtractionReviewProps) {
   // Debug logging - only in development
   if (process.env.NODE_ENV === 'development') {
     console.log('[ExtractionReview] Received initialData:', initialData)
     console.log('[ExtractionReview] initialData keys:', initialData ? Object.keys(initialData) : 'null')
+    console.log('[ExtractionReview] Quote type from props:', quoteType)
   }
-
-  // Detect initial quote type from data
-  const detectedType = useMemo(() => {
-    const type = detectExtractionType(initialData)
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[ExtractionReview] Detected type:', type)
-    }
-    return type
-  }, [initialData])
-
-  const suggestedType = useMemo(() => {
-    const type = suggestQuoteType(initialData)
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[ExtractionReview] Suggested type:', type)
-    }
-    return type
-  }, [initialData])
-
-  // Quote type state - use detected type if available, otherwise use suggested
-  const [quoteType, setQuoteType] = useState<QuoteType>(() => {
-    // Map API types to UI types
-    if (detectedType === 'home' || detectedType === 'home_api') {
-      return 'home'
-    }
-    if (detectedType === 'auto' || detectedType === 'auto_api') {
-      return 'auto'
-    }
-    if (detectedType === 'both') {
-      return 'both'
-    }
-    return suggestedType
-  })
 
   // Track which tab is active for "both" mode
   const [activeTab, setActiveTab] = useState<'home' | 'auto'>('home')
@@ -110,11 +80,6 @@ export function ExtractionReview({
     }
     return data || createEmptyAutoExtraction()
   })
-
-  // Notify parent of initial quote type on mount
-  useEffect(() => {
-    onQuoteTypeChange?.(quoteType)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Save handler for home data
   const handleSaveHome = useCallback(
@@ -196,17 +161,6 @@ export function ExtractionReview({
     [extractionId, homeData, autoData]
   )
 
-  // Handle quote type change
-  const handleQuoteTypeChange = useCallback((newType: QuoteType) => {
-    setQuoteType(newType)
-    // Notify parent of quote type change
-    onQuoteTypeChange?.(newType)
-    // Reset active tab when switching to "both"
-    if (newType === 'both') {
-      setActiveTab('home')
-    }
-  }, [onQuoteTypeChange])
-
   // Render content based on quote type
   const renderContent = () => {
     switch (quoteType) {
@@ -274,22 +228,8 @@ export function ExtractionReview({
   }
 
   return (
-    <div className="space-y-8">
-      {/* Quote Type Selector Card */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 bg-card border rounded-xl shadow-sm">
-        <div className="space-y-1">
-          <h3 className="text-base font-semibold text-foreground">Quote Type</h3>
-          <p className="text-sm text-muted-foreground">
-            Select the type of insurance quote to generate
-          </p>
-        </div>
-        <QuoteTypeSelector value={quoteType} onChange={handleQuoteTypeChange} />
-      </div>
-
-      {/* Form Content */}
-      <div className="space-y-6">
-        {renderContent()}
-      </div>
+    <div className="space-y-6">
+      {renderContent()}
     </div>
   )
 }

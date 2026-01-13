@@ -125,6 +125,7 @@ import {
   AutoVehicleDeductible,
   AutoVehicleLienholder,
   AutoAccidentOrTicket,
+  AutoSpecificPersonalInfo,
 } from '@/types/extraction'
 import {
   HomeExtractionResult,
@@ -782,13 +783,19 @@ export function getAutoExtractionData(
         console.log('[Transform] getAutoExtractionData: returning auto from CombinedUiExtractionData')
         return data.auto
       }
-      // For API combined data, reconstruct from shared + auto parts using autoApiToUiExtraction
+      // For API combined data, reconstruct from shared + autoPersonal + auto parts using autoApiToUiExtraction
       const combined = data as CombinedExtractionData
       if (combined.auto) {
         console.log('[Transform] getAutoExtractionData: transforming CombinedExtractionData using autoApiToUiExtraction')
+        console.log('[Transform] getAutoExtractionData: autoPersonal exists =', !!combined.autoPersonal)
+
+        // Get auto-specific fields from autoPersonal or create defaults
+        const autoPersonal: Partial<AutoSpecificPersonalInfo> = combined.autoPersonal || {}
+
         // Reconstruct an AutoApiExtractionResult from combined data and transform it
         return autoApiToUiExtraction({
           personal: {
+            // Shared fields from shared personal info
             ownerFirstName: combined.shared.ownerFirstName,
             ownerLastName: combined.shared.ownerLastName,
             ownerDOB: combined.shared.ownerDOB,
@@ -806,17 +813,24 @@ export function getAutoExtractionData(
             yearsAtCurrentAddress: combined.shared.yearsAtCurrentAddress,
             phone: combined.shared.phone,
             email: combined.shared.email,
-            // Auto-specific fields - create empty defaults
-            ownerDriversLicense: createEmptyAutoField(),
-            ownerLicenseState: createEmptyAutoField(),
-            spouseDriversLicense: createEmptyAutoField(),
-            spouseLicenseState: createEmptyAutoField(),
-            ownerOccupation: createEmptyAutoField(),
-            spouseOccupation: createEmptyAutoField(),
-            ownerEducation: createEmptyAutoField(),
-            spouseEducation: createEmptyAutoField(),
-            rideShare: createEmptyBooleanField(),
-            delivery: createEmptyBooleanField(),
+            // Auto-specific fields from autoPersonal (with fallback to empty defaults)
+            effectiveDate: autoPersonal.effectiveDate || createEmptyAutoField(),
+            maritalStatus: autoPersonal.maritalStatus || createEmptyAutoField(),
+            garagingAddressSameAsMailing: autoPersonal.garagingAddressSameAsMailing || createEmptyBooleanField(),
+            garagingStreetAddress: autoPersonal.garagingStreetAddress || createEmptyAutoField(),
+            garagingCity: autoPersonal.garagingCity || createEmptyAutoField(),
+            garagingState: autoPersonal.garagingState || createEmptyAutoField(),
+            garagingZipCode: autoPersonal.garagingZipCode || createEmptyAutoField(),
+            ownerDriversLicense: autoPersonal.ownerDriversLicense || createEmptyAutoField(),
+            ownerLicenseState: autoPersonal.ownerLicenseState || createEmptyAutoField(),
+            spouseDriversLicense: autoPersonal.spouseDriversLicense || createEmptyAutoField(),
+            spouseLicenseState: autoPersonal.spouseLicenseState || createEmptyAutoField(),
+            ownerOccupation: autoPersonal.ownerOccupation || createEmptyAutoField(),
+            spouseOccupation: autoPersonal.spouseOccupation || createEmptyAutoField(),
+            ownerEducation: autoPersonal.ownerEducation || createEmptyAutoField(),
+            spouseEducation: autoPersonal.spouseEducation || createEmptyAutoField(),
+            rideShare: autoPersonal.rideShare || createEmptyBooleanField(),
+            delivery: autoPersonal.delivery || createEmptyBooleanField(),
           },
           additionalDrivers: combined.auto.additionalDrivers || [],
           vehicles: combined.auto.vehicles || [],
