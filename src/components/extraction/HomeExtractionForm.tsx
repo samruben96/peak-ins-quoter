@@ -27,6 +27,8 @@ import { FieldEditor } from './FieldEditor'
 import { FormSection, calculateSectionStats } from './FormSection'
 import { ClaimsEditor } from './ClaimsEditor'
 import { ScheduledItemsEditor } from './ScheduledItemsEditor'
+import { AutoSaveIndicator } from './AutoSaveIndicator'
+import { useAutoSave } from '@/hooks/use-auto-save'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
@@ -96,8 +98,8 @@ const FIELD_CONFIG_MAP: Partial<Record<keyof HomeExtractionResult, Record<string
 // Fields that should only show when coApplicantPresent is "Yes"
 const SPOUSE_FIELDS = ['spouseFirstName', 'spouseLastName', 'spouseDOB', 'spouseSSN']
 
-// Fields related to prior address (show hint when yearsAtCurrentAddress < 5)
-const PRIOR_ADDRESS_FIELDS = ['priorAddress', 'priorCity', 'priorState', 'priorZipCode']
+// Fields related to prior address (only show when yearsAtCurrentAddress < 5)
+const PRIOR_ADDRESS_FIELDS = ['priorAddress', 'priorCity', 'priorState', 'priorZipCode', 'yearsAtPriorAddress']
 
 export function HomeExtractionForm({
   extractionId: _extractionId,
@@ -106,8 +108,30 @@ export function HomeExtractionForm({
   className,
 }: HomeExtractionFormProps) {
   const [data, setData] = useState<HomeExtractionResult>(initialData)
-  const [isSaving, setIsSaving] = useState(false)
-  const [hasChanges, setHasChanges] = useState(false)
+
+  // Auto-save hook - handles debouncing and status tracking
+  const {
+    status: autoSaveStatus,
+    lastSavedAt,
+    error: autoSaveError,
+    saveNow,
+    resetStatus,
+  } = useAutoSave({
+    data,
+    onSave: onSave || (async () => {}),
+    debounceMs: 1500,
+    enabled: !!onSave,
+    onSaveSuccess: () => {
+      toast.success('Changes saved', { duration: 2000 })
+    },
+    onSaveError: () => {
+      toast.error('Failed to save changes')
+    },
+  })
+
+  // Derive isSaving and hasChanges from auto-save status for backward compatibility
+  const isSaving = autoSaveStatus === 'saving'
+  const hasChanges = autoSaveStatus === 'pending' || autoSaveStatus === 'error'
 
   // Calculate overall form statistics
   const formStats = useMemo(() => {
@@ -187,7 +211,7 @@ export function HomeExtractionForm({
           },
         }
       })
-      setHasChanges(true)
+      // Auto-save detects changes automatically via data comparison
     },
     []
   )
@@ -198,7 +222,7 @@ export function HomeExtractionForm({
       ...prev,
       claimsHistory: { claims },
     }))
-    setHasChanges(true)
+    // Auto-save detects changes automatically
   }, [])
 
   // Handle scheduled items changes
@@ -208,33 +232,19 @@ export function HomeExtractionForm({
         ...prev,
         scheduledItems,
       }))
-      setHasChanges(true)
+      // Auto-save detects changes automatically
     },
     []
   )
 
-  // Save handler
+  // Manual save handler (force save, bypasses debounce)
   const handleSave = async () => {
     if (!onSave) return
-
-    setIsSaving(true)
-    try {
-      await onSave(data)
-      setHasChanges(false)
-      toast.success('Changes saved successfully')
-    } catch {
-      toast.error('Failed to save changes')
-    } finally {
-      setIsSaving(false)
-    }
+    await saveNow()
   }
 
   // Check if spouse fields should be visible
   const showSpouseFields = data.personal.coApplicantPresent.value === 'Yes'
-
-  // Check if prior address is required (years at current address < 5)
-  const yearsAtCurrent = data.personal.yearsAtCurrentAddress.value
-  const needsPriorAddress = yearsAtCurrent !== null && parseFloat(yearsAtCurrent) < 5
 
   // Check if dog breed field should be visible
   const showDogBreed = data.safetyRisk.dog.value === 'Yes'
@@ -242,11 +252,24 @@ export function HomeExtractionForm({
   // Check if days rented field should be visible (short-term rental)
   const showDaysRented = data.occupancy.shortTermRental.value === 'Yes'
 
+  // Check if prior address fields should be shown (only when < 5 years at current address)
+  const shouldShowPriorAddress = useMemo(() => {
+    const yearsStr = data.personal.yearsAtCurrentAddress?.value
+    if (!yearsStr) return false // Don't show if no value entered yet
+    const years = parseFloat(yearsStr)
+    return !isNaN(years) && years < 5
+  }, [data.personal.yearsAtCurrentAddress?.value])
+
   // Helper to check if a field should be visible based on conditional logic
   const isFieldVisible = (sectionKey: string, fieldKey: string): boolean => {
     // Personal section: spouse fields conditional on coApplicantPresent
     if (sectionKey === 'personal' && SPOUSE_FIELDS.includes(fieldKey)) {
       return showSpouseFields
+    }
+
+    // Personal section: prior address fields only show when yearsAtCurrentAddress < 5
+    if (sectionKey === 'personal' && PRIOR_ADDRESS_FIELDS.includes(fieldKey)) {
+      return shouldShowPriorAddress
     }
 
     // Safety section: dogBreed conditional on dog
@@ -264,7 +287,7 @@ export function HomeExtractionForm({
 
   // Helper to check if prior address hint should show
   const shouldShowPriorAddressHint = (sectionKey: string, fieldKey: string): boolean => {
-    return sectionKey === 'personal' && PRIOR_ADDRESS_FIELDS.includes(fieldKey) && needsPriorAddress
+    return sectionKey === 'personal' && PRIOR_ADDRESS_FIELDS.includes(fieldKey) && shouldShowPriorAddress
   }
 
   // Render fields for a standard section with conditional logic
@@ -279,8 +302,8 @@ export function HomeExtractionForm({
       isFieldVisible(sectionKey, fieldKey)
     )
 
-    // Check if we need to show the prior address info alert
-    const showPriorAddressAlert = sectionKey === 'personal' && needsPriorAddress
+    // Check if we need to show the prior address info alert (only when fields are visible)
+    const showPriorAddressAlert = sectionKey === 'personal' && shouldShowPriorAddress
 
     return (
       <div className="space-y-6">
@@ -335,18 +358,28 @@ export function HomeExtractionForm({
 
   return (
     <div className={cn('space-y-8', className)}>
-      {/* Header with save button and overall stats */}
+      {/* Header with auto-save indicator and overall stats */}
       <div className="p-6 bg-card border rounded-xl shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6">
           <div className="flex-1 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                <Home className="h-5 w-5 text-primary" />
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                  <Home className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-foreground">Home Insurance Extraction</h2>
+                  <p className="text-sm text-muted-foreground">Review and verify extracted data</p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-lg font-semibold text-foreground">Home Insurance Extraction</h2>
-                <p className="text-sm text-muted-foreground">Review and verify extracted data</p>
-              </div>
+              {/* Auto-save status indicator */}
+              <AutoSaveIndicator
+                status={autoSaveStatus}
+                lastSavedAt={lastSavedAt}
+                error={autoSaveError}
+                onRetry={saveNow}
+                onDismiss={resetStatus}
+              />
             </div>
 
             {/* Progress bar */}
@@ -383,19 +416,23 @@ export function HomeExtractionForm({
             </div>
           </div>
 
-          <Button
-            onClick={handleSave}
-            disabled={!hasChanges || isSaving}
-            size="lg"
-            className="shrink-0"
-          >
-            {isSaving ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="mr-2 h-4 w-4" />
-            )}
-            Save Changes
-          </Button>
+          {/* Force save button - useful when user wants to save immediately */}
+          {hasChanges && (
+            <Button
+              onClick={handleSave}
+              disabled={isSaving}
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+            >
+              {isSaving ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="mr-2 h-4 w-4" />
+              )}
+              Save Now
+            </Button>
+          )}
         </div>
       </div>
 
@@ -460,16 +497,25 @@ export function HomeExtractionForm({
         })}
       </div>
 
-      {/* Bottom save button for long forms */}
-      <div className="flex justify-end pt-6 border-t mt-8">
-        <Button onClick={handleSave} disabled={!hasChanges || isSaving} size="lg">
-          {isSaving ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <Save className="mr-2 h-4 w-4" />
-          )}
-          Save All Changes
-        </Button>
+      {/* Bottom status and save button for long forms */}
+      <div className="flex items-center justify-between pt-6 border-t mt-8">
+        <AutoSaveIndicator
+          status={autoSaveStatus}
+          lastSavedAt={lastSavedAt}
+          error={autoSaveError}
+          onRetry={saveNow}
+          onDismiss={resetStatus}
+        />
+        {hasChanges && (
+          <Button onClick={handleSave} disabled={isSaving} variant="outline">
+            {isSaving ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="mr-2 h-4 w-4" />
+            )}
+            Save Now
+          </Button>
+        )}
       </div>
     </div>
   )

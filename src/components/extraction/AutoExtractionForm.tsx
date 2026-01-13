@@ -29,6 +29,8 @@ import {
 } from '@/types/auto-extraction'
 import { FormSection, calculateSectionStats } from './FormSection'
 import { FieldEditor } from './FieldEditor'
+import { AutoSaveIndicator } from './AutoSaveIndicator'
+import { useAutoSave } from '@/hooks/use-auto-save'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -182,8 +184,30 @@ export function AutoExtractionForm({
   className,
 }: AutoExtractionFormProps) {
   const [data, setData] = useState<AutoExtractionResult>(initialData)
-  const [isSaving, setIsSaving] = useState(false)
-  const [hasChanges, setHasChanges] = useState(false)
+
+  // Auto-save hook - handles debouncing and status tracking
+  const {
+    status: autoSaveStatus,
+    lastSavedAt,
+    error: autoSaveError,
+    saveNow,
+    resetStatus,
+  } = useAutoSave({
+    data,
+    onSave: onSave || (async () => {}),
+    debounceMs: 1500,
+    enabled: !!onSave,
+    onSaveSuccess: () => {
+      toast.success('Changes saved', { duration: 2000 })
+    },
+    onSaveError: () => {
+      toast.error('Failed to save changes')
+    },
+  })
+
+  // Derive isSaving and hasChanges from auto-save status for backward compatibility
+  const isSaving = autoSaveStatus === 'saving'
+  const hasChanges = autoSaveStatus === 'pending' || autoSaveStatus === 'error'
 
   // Calculate overall form statistics using type-safe extractFieldStats
   const formStats = useMemo(() => {
@@ -312,7 +336,7 @@ export function AutoExtractionForm({
           },
         }
       })
-      setHasChanges(true)
+      // Auto-save detects changes automatically
     },
     []
   )
@@ -356,7 +380,7 @@ export function AutoExtractionForm({
         },
       }
     })
-    setHasChanges(true)
+    // Auto-save detects changes automatically
   }, [])
 
   // Handle prior insurance field changes
@@ -374,7 +398,7 @@ export function AutoExtractionForm({
           },
         },
       }))
-      setHasChanges(true)
+      // Auto-save detects changes automatically
     },
     []
   )
@@ -385,7 +409,7 @@ export function AutoExtractionForm({
       ...prev,
       additionalDrivers: [...prev.additionalDrivers, createEmptyAutoDriver()],
     }))
-    setHasChanges(true)
+    // Auto-save detects changes automatically
   }, [])
 
   const handleRemoveDriver = useCallback((index: number) => {
@@ -393,7 +417,7 @@ export function AutoExtractionForm({
       ...prev,
       additionalDrivers: prev.additionalDrivers.filter((_, i) => i !== index),
     }))
-    setHasChanges(true)
+    // Auto-save detects changes automatically
   }, [])
 
   const handleDriverFieldChange = useCallback(
@@ -426,7 +450,7 @@ export function AutoExtractionForm({
           }
         }),
       }))
-      setHasChanges(true)
+      // Auto-save detects changes automatically
     },
     []
   )
@@ -436,7 +460,7 @@ export function AutoExtractionForm({
       ...prev,
       vehicles: [...prev.vehicles, createEmptyAutoVehicle()],
     }))
-    setHasChanges(true)
+    // Auto-save detects changes automatically
   }, [])
 
   const handleRemoveVehicle = useCallback((index: number) => {
@@ -444,7 +468,7 @@ export function AutoExtractionForm({
       ...prev,
       vehicles: prev.vehicles.filter((_, i) => i !== index),
     }))
-    setHasChanges(true)
+    // Auto-save detects changes automatically
   }, [])
 
   const handleVehicleFieldChange = useCallback(
@@ -476,7 +500,7 @@ export function AutoExtractionForm({
           }
         }),
       }))
-      setHasChanges(true)
+      // Auto-save detects changes automatically
     },
     []
   )
@@ -486,7 +510,7 @@ export function AutoExtractionForm({
       ...prev,
       lienholders: [...prev.lienholders, createEmptyAutoLienholder()],
     }))
-    setHasChanges(true)
+    // Auto-save detects changes automatically
   }, [])
 
   const handleRemoveLienholder = useCallback((index: number) => {
@@ -494,7 +518,7 @@ export function AutoExtractionForm({
       ...prev,
       lienholders: prev.lienholders.filter((_, i) => i !== index),
     }))
-    setHasChanges(true)
+    // Auto-save detects changes automatically
   }, [])
 
   const handleLienholderFieldChange = useCallback(
@@ -514,7 +538,7 @@ export function AutoExtractionForm({
           }
         }),
       }))
-      setHasChanges(true)
+      // Auto-save detects changes automatically
     },
     []
   )
@@ -524,7 +548,7 @@ export function AutoExtractionForm({
       ...prev,
       accidentsOrTickets: [...prev.accidentsOrTickets, createEmptyAutoAccidentOrTicket()],
     }))
-    setHasChanges(true)
+    // Auto-save detects changes automatically
   }, [])
 
   const handleRemoveIncident = useCallback((index: number) => {
@@ -532,7 +556,7 @@ export function AutoExtractionForm({
       ...prev,
       accidentsOrTickets: prev.accidentsOrTickets.filter((_, i) => i !== index),
     }))
-    setHasChanges(true)
+    // Auto-save detects changes automatically
   }, [])
 
   const handleIncidentFieldChange = useCallback(
@@ -552,25 +576,15 @@ export function AutoExtractionForm({
           }
         }),
       }))
-      setHasChanges(true)
+      // Auto-save detects changes automatically
     },
     []
   )
 
-  // Save handler
+  // Manual save handler (force save, bypasses debounce)
   const handleSave = async () => {
     if (!onSave) return
-
-    setIsSaving(true)
-    try {
-      await onSave(data)
-      setHasChanges(false)
-      toast.success('Changes saved successfully')
-    } catch {
-      toast.error('Failed to save changes')
-    } finally {
-      setIsSaving(false)
-    }
+    await saveNow()
   }
 
   // Vehicle validation
@@ -611,18 +625,28 @@ export function AutoExtractionForm({
 
   return (
     <div className={cn('space-y-8', className)}>
-      {/* Header with save button and overall stats */}
+      {/* Header with auto-save indicator and overall stats */}
       <div className="p-6 bg-card border rounded-xl shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6">
           <div className="flex-1 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100">
-                <Car className="h-5 w-5 text-blue-600" />
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100">
+                  <Car className="h-5 w-5 text-blue-600" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-foreground">Auto Insurance Extraction</h2>
+                  <p className="text-sm text-muted-foreground">Review and verify extracted data</p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-lg font-semibold text-foreground">Auto Insurance Extraction</h2>
-                <p className="text-sm text-muted-foreground">Review and verify extracted data</p>
-              </div>
+              {/* Auto-save status indicator */}
+              <AutoSaveIndicator
+                status={autoSaveStatus}
+                lastSavedAt={lastSavedAt}
+                error={autoSaveError}
+                onRetry={saveNow}
+                onDismiss={resetStatus}
+              />
             </div>
 
             {/* Progress bar */}
@@ -661,19 +685,23 @@ export function AutoExtractionForm({
             </div>
           </div>
 
-          <Button
-            onClick={handleSave}
-            disabled={!hasChanges || isSaving}
-            size="lg"
-            className="shrink-0"
-          >
-            {isSaving ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="mr-2 h-4 w-4" />
-            )}
-            Save Changes
-          </Button>
+          {/* Force save button - useful when user wants to save immediately */}
+          {hasChanges && (
+            <Button
+              onClick={handleSave}
+              disabled={isSaving}
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+            >
+              {isSaving ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="mr-2 h-4 w-4" />
+              )}
+              Save Now
+            </Button>
+          )}
         </div>
       </div>
 
@@ -788,36 +816,30 @@ export function AutoExtractionForm({
               )}
             </div>
 
-            {/* Prior Address - Conditional with visual indicator */}
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <h4 className="text-sm font-medium text-muted-foreground">Prior Address</h4>
-                {/* Show warning indicator when years at current < 5 */}
-                {data.personal.yearsAtCurrentAddress.value &&
-                 parseInt(data.personal.yearsAtCurrentAddress.value) < 5 && (
-                  <Badge variant="outline" className="border-orange-200 bg-orange-50 text-orange-700 text-xs">
+            {/* Prior Address - Only show when yearsAtCurrentAddress < 5 */}
+            {data.personal.yearsAtCurrentAddress.value &&
+             parseFloat(data.personal.yearsAtCurrentAddress.value) < 5 && (
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <MapPin className="h-4 w-4 text-muted-foreground" />
+                  <h4 className="text-sm font-medium text-muted-foreground">Prior Address</h4>
+                  <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700 text-xs">
                     <Info className="w-3 h-3 mr-1" />
-                    Required: Less than 5 years at current
+                    Required: Less than 5 years at current address
                   </Badge>
-                )}
-                {(!data.personal.yearsAtCurrentAddress.value ||
-                  parseInt(data.personal.yearsAtCurrentAddress.value) >= 5) && (
-                  <span className="text-xs text-muted-foreground">
-                    (Required if less than 5 years at current address)
-                  </span>
-                )}
+                </div>
+                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                  {(['priorStreetAddress', 'priorCity', 'priorState', 'priorZipCode'] as (keyof AutoPersonalInfo)[]).map((key) =>
+                    renderField(
+                      data.personal[key],
+                      `personal-${key}`,
+                      AUTO_PERSONAL_FIELDS[key],
+                      (value) => handlePersonalChange(key, value)
+                    )
+                  )}
+                </div>
               </div>
-              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                {(['priorStreetAddress', 'priorCity', 'priorState', 'priorZipCode'] as (keyof AutoPersonalInfo)[]).map((key) =>
-                  renderField(
-                    data.personal[key],
-                    `personal-${key}`,
-                    AUTO_PERSONAL_FIELDS[key],
-                    (value) => handlePersonalChange(key, value)
-                  )
-                )}
-              </div>
-            </div>
+            )}
 
             {/* Contact & Driving */}
             <div>
@@ -1175,16 +1197,25 @@ export function AutoExtractionForm({
         </FormSection>
       </div>
 
-      {/* Bottom save button for long forms */}
-      <div className="flex justify-end pt-6 border-t mt-8">
-        <Button onClick={handleSave} disabled={!hasChanges || isSaving} size="lg">
-          {isSaving ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <Save className="mr-2 h-4 w-4" />
-          )}
-          Save All Changes
-        </Button>
+      {/* Bottom status and save button for long forms */}
+      <div className="flex items-center justify-between pt-6 border-t mt-8">
+        <AutoSaveIndicator
+          status={autoSaveStatus}
+          lastSavedAt={lastSavedAt}
+          error={autoSaveError}
+          onRetry={saveNow}
+          onDismiss={resetStatus}
+        />
+        {hasChanges && (
+          <Button onClick={handleSave} disabled={isSaving} variant="outline">
+            {isSaving ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="mr-2 h-4 w-4" />
+            )}
+            Save Now
+          </Button>
+        )}
       </div>
     </div>
   )

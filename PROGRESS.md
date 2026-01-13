@@ -1,6 +1,6 @@
 # Peak Quote - Development Progress Tracker
 
-> **Last Updated:** January 13, 2026 (Session 12)
+> **Last Updated:** January 13, 2026 (Session 13)
 >
 > **IMPORTANT:** This document should be updated after each development session. See CLAUDE.md for instructions.
 
@@ -15,6 +15,71 @@
 ---
 
 ## Session Log
+
+### Session: January 13, 2026 (Session 13)
+
+**Focus:** Auto-Save Functionality for Extraction Review Forms
+
+---
+
+#### Summary
+
+Implemented auto-save functionality for both Home and Auto extraction review forms. Changes are now automatically saved with a 1.5-second debounce after the user stops typing, eliminating the need for manual save actions while still providing a "Save Now" button for immediate saves.
+
+---
+
+#### Files Created
+
+| File | Description |
+|------|-------------|
+| `/src/hooks/use-auto-save.ts` | Custom hook for debounced auto-save with status tracking |
+| `/src/components/extraction/AutoSaveIndicator.tsx` | Visual feedback component showing save status |
+
+---
+
+#### Files Updated
+
+| File | Changes |
+|------|---------|
+| `/src/components/extraction/HomeExtractionForm.tsx` | Integrated auto-save hook, replaced manual save with debounced auto-save |
+| `/src/components/extraction/AutoExtractionForm.tsx` | Integrated auto-save hook, replaced manual save with debounced auto-save |
+| `/src/hooks/index.ts` | Exported new auto-save hook |
+
+---
+
+#### Features
+
+**useAutoSave Hook:**
+- Debounces saves (configurable, default 1500ms)
+- Detects actual data changes via JSON comparison
+- Handles race conditions (data changes during save)
+- Tracks status: `idle`, `pending`, `saving`, `saved`, `error`
+- Provides `saveNow()` for immediate saves
+- Handles component unmount gracefully
+- Shows toast notifications on save success/error
+
+**AutoSaveIndicator Component:**
+- Shows "Unsaved changes" when pending
+- Shows "Saving..." with spinner during save
+- Shows "Saved" with checkmark on success
+- Shows "Failed to save" with retry option on error
+- Displays relative time ("Saved 2 minutes ago") when idle
+
+**UI Changes:**
+- Removed prominent "Save Changes" button (auto-save handles it)
+- Added subtle "Save Now" button that appears only when there are pending changes
+- Added auto-save status indicator in both header and footer of forms
+
+---
+
+#### Technical Notes
+
+- Auto-save uses JSON serialization for change detection (configurable via `isEqual` option)
+- The hook supports custom equality comparisons for complex data types
+- Race condition handling ensures latest data is always saved even if user continues editing during save
+- `forceSave` alias provided for `saveNow` for semantic clarity
+
+---
 
 ### Session: January 13, 2026 (Session 12)
 

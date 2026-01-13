@@ -339,3 +339,40 @@ export type ExtractionUpdate = Database['public']['Tables']['extractions']['Upda
 export type QuoteRow = Database['public']['Tables']['quotes']['Row']
 export type QuoteInsert = Database['public']['Tables']['quotes']['Insert']
 export type QuoteUpdate = Database['public']['Tables']['quotes']['Update']
+
+// =============================================================================
+// API Response Types for Auto-Save
+// =============================================================================
+
+/**
+ * Successful auto-save response from PATCH /api/extractions/[id]
+ */
+export interface AutoSaveSuccessResponse {
+  success: true
+  updated_at: string
+}
+
+/**
+ * Conflict response when optimistic locking fails
+ */
+export interface AutoSaveConflictResponse {
+  success: false
+  error: 'Resource has been modified'
+  current_updated_at: string
+}
+
+/**
+ * Generic error response for auto-save
+ */
+export interface AutoSaveErrorResponse {
+  success: false
+  error: string
+}
+
+/**
+ * Union type for all possible auto-save responses
+ */
+export type AutoSaveResponse =
+  | AutoSaveSuccessResponse
+  | AutoSaveConflictResponse
+  | AutoSaveErrorResponse

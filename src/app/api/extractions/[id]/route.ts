@@ -3,6 +3,12 @@ import { createClient } from '@/lib/supabase/server'
 import { ExtractedDataType } from '@/types/database'
 
 /**
+ * Maximum request body size for extraction updates (5MB)
+ * This limits the size of extracted_data JSON payloads
+ */
+const MAX_BODY_SIZE = 5 * 1024 * 1024
+
+/**
  * Validate UUID format (v4)
  * Returns true if the string is a valid UUID v4 format
  */
@@ -47,6 +53,31 @@ export async function GET(
   }
 }
 
+/**
+ * PATCH /api/extractions/[id]
+ *
+ * Optimized for auto-save functionality with debounced field changes.
+ * - Validates request size to prevent oversized payloads
+ * - Performs idempotent updates (same data = same result)
+ * - Returns minimal response for efficiency
+ * - Supports optimistic locking via If-Match header (optional)
+ *
+ * Request body:
+ * - extracted_data: ExtractedDataType (required) - full or partial extraction data
+ *
+ * Response (success):
+ * {
+ *   "success": true,
+ *   "updated_at": "2026-01-13T12:00:00Z"
+ * }
+ *
+ * Response (conflict - optimistic locking):
+ * {
+ *   "success": false,
+ *   "error": "Resource has been modified",
+ *   "current_updated_at": "2026-01-13T12:00:00Z"
+ * }
+ */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -56,8 +87,17 @@ export async function PATCH(
     const contentType = request.headers.get('content-type')
     if (!contentType || !contentType.includes('application/json')) {
       return NextResponse.json(
-        { error: 'Content-Type must be application/json' },
+        { success: false, error: 'Content-Type must be application/json' },
         { status: 415 }
+      )
+    }
+
+    // Validate request body size via Content-Length header
+    const contentLength = request.headers.get('content-length')
+    if (contentLength && parseInt(contentLength, 10) > MAX_BODY_SIZE) {
+      return NextResponse.json(
+        { success: false, error: 'Request body too large' },
+        { status: 413 }
       )
     }
 
@@ -66,12 +106,18 @@ export async function PATCH(
 
     // Validate UUID format before database query
     if (!isValidUUID(id)) {
-      return NextResponse.json({ error: 'Invalid extraction ID format' }, { status: 400 })
+      return NextResponse.json(
+        { success: false, error: 'Invalid extraction ID format' },
+        { status: 400 }
+      )
     }
 
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 }
+      )
     }
 
     // Parse JSON with error handling
@@ -80,27 +126,91 @@ export async function PATCH(
       body = await request.json()
     } catch (parseError) {
       console.error('PATCH extraction JSON parse error:', parseError)
-      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+      return NextResponse.json(
+        { success: false, error: 'Invalid JSON in request body' },
+        { status: 400 }
+      )
     }
 
-    const { extracted_data } = body as { extracted_data: ExtractedDataType }
+    const { extracted_data } = body
 
-    const { data: extraction, error } = await supabase
+    // Validate extracted_data is present
+    if (extracted_data === undefined) {
+      return NextResponse.json(
+        { success: false, error: 'Missing extracted_data in request body' },
+        { status: 400 }
+      )
+    }
+
+    // Check for optimistic locking via If-Match header (ETag = updated_at timestamp)
+    const ifMatchHeader = request.headers.get('if-match')
+    if (ifMatchHeader) {
+      // Fetch current updated_at to compare
+      const { data: current, error: fetchError } = await supabase
+        .from('extractions')
+        .select('updated_at')
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .single()
+
+      if (fetchError || !current) {
+        return NextResponse.json(
+          { success: false, error: 'Extraction not found' },
+          { status: 404 }
+        )
+      }
+
+      // Compare ETag (stored as ISO timestamp)
+      const currentEtag = `"${current.updated_at}"`
+      if (ifMatchHeader !== currentEtag) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Resource has been modified',
+            current_updated_at: current.updated_at,
+          },
+          { status: 409 }
+        )
+      }
+    }
+
+    // Perform the update
+    // Note: updated_at is automatically set by database trigger
+    // We only select updated_at for minimal response
+    const { data: updated, error } = await supabase
       .from('extractions')
       .update({ extracted_data })
       .eq('id', id)
       .eq('user_id', user.id)
-      .select()
+      .select('updated_at')
       .single()
 
     if (error) {
-      return NextResponse.json({ error: 'Failed to update extraction' }, { status: 500 })
+      // Check if it's a not found error (no rows matched)
+      if (error.code === 'PGRST116') {
+        return NextResponse.json(
+          { success: false, error: 'Extraction not found' },
+          { status: 404 }
+        )
+      }
+      console.error('Update extraction error:', error)
+      return NextResponse.json(
+        { success: false, error: 'Failed to update extraction' },
+        { status: 500 }
+      )
     }
 
-    return NextResponse.json({ extraction })
+    // Return minimal response optimized for auto-save
+    return NextResponse.json({
+      success: true,
+      updated_at: updated.updated_at,
+    })
   } catch (error) {
     console.error('Update extraction error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json(
+      { success: false, error: 'Internal server error' },
+      { status: 500 }
+    )
   }
 }
 

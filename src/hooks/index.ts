@@ -10,6 +10,17 @@
 export { useUpload, type UploadStatus } from './use-upload'
 
 // =============================================================================
+// Auto-Save Hook
+// =============================================================================
+
+export {
+  useAutoSave,
+  type AutoSaveStatus,
+  type UseAutoSaveOptions,
+  type UseAutoSaveReturn,
+} from './use-auto-save'
+
+// =============================================================================
 // Array Field Hooks
 // =============================================================================
 
