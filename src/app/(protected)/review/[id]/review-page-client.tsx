@@ -1,12 +1,14 @@
 'use client'
 
-import Link from 'next/link'
+import { useRef, useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
-import { ExtractionReview, QuoteType } from '@/components/extraction'
+import { ExtractionReview, QuoteType, ExtractionReviewHandle } from '@/components/extraction'
 import { ExtractedDataType } from '@/types/database'
 import { InsuranceType } from '@/types/extraction'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
 
 interface ReviewPageClientProps {
   extractionId: string
@@ -39,11 +41,41 @@ export function ReviewPageClient({
   extractedData,
   insuranceType,
 }: ReviewPageClientProps) {
+  const router = useRouter()
+  const extractionReviewRef = useRef<ExtractionReviewHandle>(null)
+  const [isNavigating, setIsNavigating] = useState(false)
+
   // Convert insurance type to quote type for the ExtractionReview component
   const quoteType = insuranceTypeToQuoteType(insuranceType)
 
   // Build the quote URL with the insurance type
   const quoteUrl = `/review/${extractionId}/quote?type=${quoteType}`
+
+  /**
+   * Handle navigation to quote page - ensures all data is saved first
+   * This prevents the race condition where auto-save hasn't completed
+   * before the user navigates away
+   */
+  const handleProceedToQuote = useCallback(async () => {
+    setIsNavigating(true)
+    try {
+      // Force save any pending changes before navigation
+      if (extractionReviewRef.current) {
+        const saveSuccess = await extractionReviewRef.current.saveBeforeNavigation()
+        if (!saveSuccess) {
+          toast.error('Failed to save changes. Please try again.')
+          setIsNavigating(false)
+          return
+        }
+      }
+      // Navigate after successful save
+      router.push(quoteUrl)
+    } catch (error) {
+      console.error('Error during navigation:', error)
+      toast.error('An error occurred. Please try again.')
+      setIsNavigating(false)
+    }
+  }, [quoteUrl, router])
 
   return (
     <>
@@ -58,6 +90,7 @@ export function ReviewPageClient({
         }}
       >
         <ExtractionReview
+          ref={extractionReviewRef}
           extractionId={extractionId}
           initialData={extractedData}
           quoteType={quoteType}
@@ -66,12 +99,24 @@ export function ReviewPageClient({
 
       {/* Floating action button for proceeding to quote */}
       <div className="sticky bottom-6 mt-8 flex justify-end">
-        <Link href={quoteUrl}>
-          <Button size="lg" className="shadow-lg gap-2">
-            Proceed to Quote
-            <ArrowRight className="h-4 w-4" />
-          </Button>
-        </Link>
+        <Button
+          size="lg"
+          className="shadow-lg gap-2"
+          onClick={handleProceedToQuote}
+          disabled={isNavigating}
+        >
+          {isNavigating ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            <>
+              Proceed to Quote
+              <ArrowRight className="h-4 w-4" />
+            </>
+          )}
+        </Button>
       </div>
     </>
   )

@@ -1,6 +1,6 @@
 # Peak Quote - Development Progress Tracker
 
-> **Last Updated:** January 13, 2026 (Session 13)
+> **Last Updated:** January 13, 2026 (Session 15)
 >
 > **IMPORTANT:** This document should be updated after each development session. See CLAUDE.md for instructions.
 
@@ -15,6 +15,269 @@
 ---
 
 ## Session Log
+
+### Session: January 13, 2026 (Session 15)
+
+**Focus:** Webhook Payload Implementation for Quote Submission
+
+---
+
+#### Summary
+
+Implemented the webhook payload structure for sending quote data to an external RPA system when users click "Submit Quote". The payload transforms validated quote data into a clean, structured JSON format suitable for RPA consumption.
+
+---
+
+#### Files Created
+
+| File | Description |
+|------|-------------|
+| `/src/types/webhook.ts` | TypeScript types for webhook payload structure |
+| `/src/lib/webhook/transform.ts` | Transform functions to convert quote data to webhook format |
+| `/src/lib/webhook/index.ts` | Export module for webhook utilities |
+| `/docs/examples/webhook-payload-example.json` | Example JSON payload using Smith Family test data |
+
+---
+
+#### Files Updated
+
+| File | Changes |
+|------|---------|
+| `/src/app/api/quotes/submit/route.ts` | Added webhook payload transformation and preparation |
+
+---
+
+#### Webhook Payload Structure
+
+The webhook payload includes:
+
+**1. Metadata**
+```typescript
+{
+  quoteId: string,
+  extractionId: string,
+  userId: string,
+  filename: string,
+  submittedAt: string,  // ISO 8601
+  quoteType: 'home' | 'auto' | 'both',
+  version: '1.0.0'
+}
+```
+
+**2. Personal Information**
+- First/last name, DOB, SSN, phone, email
+- Spouse information (if applicable)
+- Address with prior address support
+
+**3. Home Insurance Data** (if applicable)
+- Property details (year built, sq ft, construction, roof, etc.)
+- Occupancy information
+- Safety features
+- Coverage amounts
+- Scheduled items (jewelry, valuables)
+- Insurance/lienholder details
+
+**4. Auto Insurance Data** (if applicable)
+- Drivers array (primary, spouse, additional)
+- Vehicles array with deductibles and lienholders
+- Coverage limits
+- Prior insurance
+- Incidents/tickets
+
+---
+
+#### Example Usage
+
+When a quote is submitted, the API now:
+1. Validates and stores the quote in the database
+2. Transforms the quote data to webhook format
+3. Prepares the webhook payload (logs it for now)
+4. Returns the payload in the response for verification
+
+**To enable actual webhook sending:**
+Add `WEBHOOK_URL` environment variable and uncomment the fetch logic in `/src/lib/webhook/transform.ts`.
+
+---
+
+#### Example Webhook JSON Location
+
+See `/docs/examples/webhook-payload-example.json` for a complete example using the Smith Family test record data (Home & Auto combined quote).
+
+---
+
+#### Type Validation
+
+All TypeScript type checks pass: `npm run type-check`
+
+---
+
+---
+
+### Session: January 13, 2026 (Session 14)
+
+**Focus:** Fix Confirmation Page "Not Provided" Bug - Save Before Navigation
+
+---
+
+#### Problem
+
+On the quote confirmation page (`/review/[id]/quote`), all fields displayed "Not provided" even though values were entered on the previous edit page. The counter showed "24 of 43 fields complete" but all field values appeared empty.
+
+---
+
+#### Root Cause Analysis
+
+**Race condition between auto-save and navigation:**
+
+1. **Edit page** - User edits fields, auto-save has **1500ms debounce** before saving to DB
+2. **User clicks "Proceed to Quote"** - Navigation happens immediately via `<Link>` component
+3. **Confirmation page** - Server component fetches data fresh from database
+4. **Result:** Database fetch happens before auto-save completes → stale data with "Not provided"
+
+**Contributing factors:**
+- Auto-save debounce delay of 1500ms (`HomeExtractionForm.tsx:117`)
+- Quote page had no `export const dynamic = 'force-dynamic'` (Next.js could cache)
+- No mechanism to wait for save before navigation
+
+---
+
+#### Solution Implemented
+
+**1. Force dynamic rendering on quote page**
+
+Added `export const dynamic = 'force-dynamic'` to prevent Next.js from serving cached data.
+
+**File:** `/src/app/(protected)/review/[id]/quote/page.tsx`
+
+**2. Exposed save function from ExtractionReview via ref**
+
+Used React's `forwardRef` and `useImperativeHandle` to expose a `saveBeforeNavigation()` method that parent components can call.
+
+**Files Updated:**
+- `/src/components/extraction/ExtractionReview.tsx` - Added `forwardRef`, `useImperativeHandle`
+- `/src/components/extraction/index.ts` - Exported `ExtractionReviewHandle` type
+
+**New Interface:**
+```typescript
+export interface ExtractionReviewHandle {
+  saveBeforeNavigation: () => Promise<boolean>
+}
+```
+
+**3. Updated navigation to wait for save**
+
+Changed the "Proceed to Quote" button from a `<Link>` to a `<Button>` with programmatic navigation that waits for save to complete.
+
+**File:** `/src/app/(protected)/review/[id]/review-page-client.tsx`
+
+**Changes:**
+- Added `useRouter` for programmatic navigation
+- Added `useRef<ExtractionReviewHandle>` to get save function
+- Added loading state while saving (`isNavigating`)
+- Button shows "Saving..." spinner during save
+- Shows toast error if save fails
+- Only navigates after successful save
+
+---
+
+#### Files Updated
+
+| File | Changes |
+|------|---------|
+| `/src/app/(protected)/review/[id]/quote/page.tsx` | Added `export const dynamic = 'force-dynamic'` |
+| `/src/components/extraction/ExtractionReview.tsx` | Added `forwardRef`, `useImperativeHandle` with `saveBeforeNavigation()` |
+| `/src/components/extraction/index.ts` | Exported `ExtractionReviewHandle` type |
+| `/src/app/(protected)/review/[id]/review-page-client.tsx` | Changed from `<Link>` to programmatic navigation with save-before-navigate |
+
+---
+
+#### Technical Details
+
+**ExtractionReview imperative handle:**
+```typescript
+useImperativeHandle(ref, () => ({
+  saveBeforeNavigation: async (): Promise<boolean> => {
+    try {
+      if (quoteType === 'home') {
+        await handleSaveHome(homeData)
+      } else if (quoteType === 'auto') {
+        await handleSaveAuto(autoData)
+      } else if (quoteType === 'both') {
+        await handleSaveCombined('home', homeData)
+        await handleSaveCombined('auto', autoData)
+      }
+      return true
+    } catch (error) {
+      console.error('[ExtractionReview] saveBeforeNavigation failed:', error)
+      return false
+    }
+  },
+}), [quoteType, homeData, autoData, handleSaveHome, handleSaveAuto, handleSaveCombined])
+```
+
+**ReviewPageClient navigation handler:**
+```typescript
+const handleProceedToQuote = useCallback(async () => {
+  setIsNavigating(true)
+  try {
+    if (extractionReviewRef.current) {
+      const saveSuccess = await extractionReviewRef.current.saveBeforeNavigation()
+      if (!saveSuccess) {
+        toast.error('Failed to save changes. Please try again.')
+        setIsNavigating(false)
+        return
+      }
+    }
+    router.push(quoteUrl)
+  } catch (error) {
+    toast.error('An error occurred. Please try again.')
+    setIsNavigating(false)
+  }
+}, [quoteUrl, router])
+```
+
+---
+
+#### User Experience Improvement
+
+**Before:**
+- Click "Proceed to Quote" → Immediate navigation → All fields show "Not provided"
+
+**After:**
+- Click "Proceed to Quote" → Button shows "Saving..." spinner → Wait for save → Navigate → All fields display correctly
+
+---
+
+#### Type Validation
+
+All TypeScript type checks pass: `npm run type-check`
+
+Production build succeeds: `npm run build`
+
+---
+
+#### Verification
+
+Fix was verified working via debug logging. Console output confirmed:
+- `[QuotePreviewClient] first required field: {key: 'personal.firstName', label: 'First Name', value: 'Nicholas', status: 'valid', confidence: 'high', …}`
+- `[QuotePreviewClient] completedRequired: 46`
+
+All field values now display correctly on the confirmation page after the save-before-navigation fix.
+
+---
+
+#### Why Counter Showed "24 of 43 Complete" Before Fix
+
+The counter appeared to work while fields showed "Not provided" because:
+1. **Counter logic** (`FieldSection` line 179): `fields.filter(f => f.status === 'valid').length`
+2. **Optional fields with no value** get `status: 'valid'` (per `determineFieldStatus` in validation.ts)
+3. **Display logic** (`FieldDisplay` line 109): `field.value !== null && field.value !== ''`
+
+So optional empty fields counted as "complete" but displayed as "Not provided". Once the actual data was saved before navigation, both counter and display showed correct values.
+
+---
+
+---
 
 ### Session: January 13, 2026 (Session 13)
 

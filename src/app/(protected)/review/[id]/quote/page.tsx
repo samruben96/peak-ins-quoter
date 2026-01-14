@@ -17,6 +17,9 @@ import {
   isCombinedUiExtractionData,
 } from '@/lib/extraction/transform'
 
+// Force dynamic rendering to ensure fresh data after auto-save
+export const dynamic = 'force-dynamic'
+
 interface QuotePageProps {
   params: Promise<{ id: string }>
   searchParams: Promise<{ type?: string }>

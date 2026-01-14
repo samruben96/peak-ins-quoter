@@ -371,7 +371,7 @@ const legacyOptionalFields: FieldDefinition[] = [
 /**
  * Detects the type of extraction data structure
  */
-export type ExtractedDataType = 'home' | 'auto' | 'combined' | 'legacy'
+export type ExtractedDataType = 'home' | 'auto' | 'combined' | 'combined_ui' | 'legacy'
 
 export function detectExtractionType(
   data: HomeExtractionResult | AutoExtractionResult | ExtractionResult | CombinedExtractionData | HomeApiExtractionResult | AutoApiExtractionResult | unknown
@@ -382,7 +382,13 @@ export function detectExtractionType(
 
   const obj = data as Record<string, unknown>
 
-  // Check for combined data structure (has quoteType field)
+  // Check for CombinedUiExtractionData (UI format with home/auto objects, NOT shared)
+  // This must be checked BEFORE the API combined format
+  if ('quoteType' in obj && obj.quoteType === 'both' && ('home' in obj || 'auto' in obj) && !('shared' in obj)) {
+    return 'combined_ui'
+  }
+
+  // Check for CombinedExtractionData (API format with shared object)
   if ('quoteType' in obj && 'shared' in obj) {
     return 'combined'
   }
@@ -622,21 +628,80 @@ export function transformExtractionToValidation(
   const { required, optional } = getFieldDefinitions(quoteType, dataType)
 
   // Cast to Record for field access
-  const data = extractionData as Record<string, unknown>
+  const rawData = extractionData as Record<string, unknown>
+
+  // For combined_ui data type, we need to access fields from home/auto sub-objects
+  // based on the field's category (home fields from data.home, auto fields from data.auto)
+  let homeData: Record<string, unknown> | undefined
+  let autoData: Record<string, unknown> | undefined
+
+  if (dataType === 'combined_ui') {
+    homeData = rawData.home as Record<string, unknown>
+    autoData = rawData.auto as Record<string, unknown>
+  }
+
+  // Pre-compute sets of field keys for quick lookup
+  const homeFieldKeys = new Set([
+    ...homeRequiredFields.map(f => f.key),
+    ...homeOptionalFields.map(f => f.key)
+  ])
+  const autoFieldKeys = new Set([
+    ...autoRequiredFields.map(f => f.key),
+    ...autoOptionalFields.map(f => f.key)
+  ])
+
+  // Helper function to get the correct data source for a field based on its key
+  const getDataForField = (def: FieldDefinition): Record<string, unknown> => {
+    if (dataType === 'combined_ui') {
+      // Check if this field belongs to home or auto based on field definition lists
+      if (autoFieldKeys.has(def.key) && autoData) {
+        return autoData
+      }
+      if (homeFieldKeys.has(def.key) && homeData) {
+        return homeData
+      }
+      // Fallback: try to infer from extraction path patterns
+      // Auto-specific patterns: ownerFirstName, vehicles, additionalDrivers, etc.
+      const path = def.extractionPath
+      const isAutoPath =
+        path.includes('ownerFirstName') ||
+        path.includes('ownerLastName') ||
+        path.includes('ownerDOB') ||
+        path.includes('ownerDriversLicense') ||
+        path.includes('garagingAddress') ||
+        path.includes('rideShare') ||
+        path.includes('delivery') ||
+        path.startsWith('vehicles') ||
+        path.startsWith('additionalDrivers') ||
+        path.startsWith('lienholders') ||
+        path.startsWith('accidentsOrTickets') ||
+        path.startsWith('priorInsurance')
+
+      if (isAutoPath && autoData) {
+        return autoData
+      }
+      if (!isAutoPath && homeData) {
+        return homeData
+      }
+    }
+    return rawData
+  }
 
   // Transform scalar fields
   const requiredFields = required.map((def) =>
-    transformToUIField(def, data)
+    transformToUIField(def, getDataForField(def))
   )
   let optionalFields = optional.map((def) =>
-    transformToUIField(def, data)
+    transformToUIField(def, getDataForField(def))
   )
 
   // For auto extractions, also extract array fields (vehicles, drivers, etc.)
-  if (dataType === 'auto' || quoteType === 'auto') {
+  // Use autoData for combined_ui type, or rawData otherwise
+  const autoSource = dataType === 'combined_ui' && autoData ? autoData : rawData
+  if (dataType === 'auto' || dataType === 'combined_ui' || quoteType === 'auto' || quoteType === 'both') {
     const arrayFields: UIFieldValidation[] = []
     for (const config of AUTO_ARRAY_CONFIGS) {
-      const extracted = extractArrayFields(data, config)
+      const extracted = extractArrayFields(autoSource, config)
       arrayFields.push(...extracted)
     }
     // Separate required and optional array fields
@@ -649,8 +714,10 @@ export function transformExtractionToValidation(
   }
 
   // For home extractions, extract claims history and scheduled items if present
-  if (dataType === 'home' || quoteType === 'home') {
-    const claimsHistory = data.claimsHistory as { claims?: Array<Record<string, ExtractionField>> } | undefined
+  // Use homeData for combined_ui type, or rawData otherwise
+  const homeSource = dataType === 'combined_ui' && homeData ? homeData : rawData
+  if (dataType === 'home' || dataType === 'combined_ui' || quoteType === 'home' || quoteType === 'both') {
+    const claimsHistory = homeSource.claimsHistory as { claims?: Array<Record<string, ExtractionField>> } | undefined
     if (claimsHistory?.claims && Array.isArray(claimsHistory.claims)) {
       claimsHistory.claims.forEach((claim, index) => {
         const claimNumber = index + 1
@@ -674,7 +741,7 @@ export function transformExtractionToValidation(
     }
 
     // Extract scheduled items (jewelry, valuables)
-    const scheduledItems = data.scheduledItems as {
+    const scheduledItems = homeSource.scheduledItems as {
       jewelry?: Array<Record<string, ExtractionField>>,
       otherValuables?: Array<Record<string, ExtractionField>>
     } | undefined

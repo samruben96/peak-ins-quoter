@@ -9,6 +9,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import type { QuoteType, UIFieldValidation } from '@/types/quote'
+import type { WebhookPayload } from '@/types/webhook'
+import { transformToWebhookPayload, sendToWebhook } from '@/lib/webhook'
 
 interface QuoteSubmitRequest {
   extractionId: string
@@ -21,6 +23,7 @@ interface QuoteSubmitResponse {
   quoteId: string
   message?: string
   errors?: string[]
+  webhookPayload?: WebhookPayload  // Included for debugging/verification
 }
 
 // Transform UI fields to structured quote data for storage
@@ -209,10 +212,29 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Quote Submit] Created quote ${quote.id} for extraction ${extractionId}`)
 
+    // Transform to webhook payload format
+    const webhookPayload = transformToWebhookPayload(
+      quote.id,
+      extractionId,
+      user.id,
+      extraction.filename,
+      quoteData
+    )
+
+    // Send to webhook (currently just logs since no webhook URL configured)
+    // TODO: Add WEBHOOK_URL environment variable when ready
+    const webhookUrl = process.env.WEBHOOK_URL
+    const webhookResult = await sendToWebhook(webhookPayload, webhookUrl)
+
+    console.log(`[Quote Submit] Webhook payload prepared for quote ${quote.id}`)
+
     const response: QuoteSubmitResponse = {
       success: true,
       quoteId: quote.id,
-      message: 'Quote submitted successfully',
+      message: webhookUrl
+        ? 'Quote submitted and sent to webhook'
+        : 'Quote submitted successfully (webhook payload ready)',
+      webhookPayload, // Include for debugging/verification
     }
 
     return NextResponse.json(response)

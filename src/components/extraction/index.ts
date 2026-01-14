@@ -13,6 +13,7 @@ export { HomeExtractionForm } from './HomeExtractionForm'
 export { AutoExtractionForm } from './AutoExtractionForm'
 export { ExtractionForm } from './ExtractionForm'
 export { ExtractionReview } from './ExtractionReview'
+export type { ExtractionReviewHandle } from './ExtractionReview'
 
 // Quote type selector
 export { QuoteTypeSelector } from './QuoteTypeSelector'

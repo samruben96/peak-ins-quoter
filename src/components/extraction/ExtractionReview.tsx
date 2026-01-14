@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useImperativeHandle, forwardRef, useRef } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { HomeExtractionForm } from './HomeExtractionForm'
 import { AutoExtractionForm } from './AutoExtractionForm'
@@ -14,6 +14,18 @@ import { HomeExtractionResult, createEmptyHomeExtraction } from '@/types/home-ex
 import { AutoExtractionResult, createEmptyAutoExtraction } from '@/types/auto-extraction'
 import { CombinedUiExtractionData, ExtractedDataType } from '@/types/database'
 import { createClient } from '@/lib/supabase/client'
+
+/**
+ * Imperative handle exposed by ExtractionReview for parent components
+ */
+export interface ExtractionReviewHandle {
+  /**
+   * Saves all pending changes immediately (bypasses auto-save debounce).
+   * Call this before navigation to ensure data is persisted.
+   * Returns true if save succeeded, false if there was an error.
+   */
+  saveBeforeNavigation: () => Promise<boolean>
+}
 
 interface ExtractionReviewProps {
   extractionId: string
@@ -44,13 +56,15 @@ interface ExtractionReviewProps {
  * - Uses the quote type selected during upload (no re-selection needed)
  * - Transforms legacy data formats to new structured formats
  * - Provides tabbed interface for combined Home+Auto quotes
+ * - Exposes saveBeforeNavigation() for parent components to force save
  */
-export function ExtractionReview({
-  extractionId,
-  initialData,
-  quoteType,
-  className,
-}: ExtractionReviewProps) {
+export const ExtractionReview = forwardRef<ExtractionReviewHandle, ExtractionReviewProps>(
+  function ExtractionReview({
+    extractionId,
+    initialData,
+    quoteType,
+    className,
+  }, ref) {
   // Debug logging - only in development
   if (process.env.NODE_ENV === 'development') {
     console.log('[ExtractionReview] Received initialData:', initialData)
@@ -161,6 +175,29 @@ export function ExtractionReview({
     [extractionId, homeData, autoData]
   )
 
+  // Expose imperative handle for parent components to trigger save
+  useImperativeHandle(ref, () => ({
+    saveBeforeNavigation: async (): Promise<boolean> => {
+      try {
+        // Save based on current quote type
+        if (quoteType === 'home') {
+          await handleSaveHome(homeData)
+        } else if (quoteType === 'auto') {
+          await handleSaveAuto(autoData)
+        } else if (quoteType === 'both') {
+          // For combined quotes, save both home and auto
+          await handleSaveCombined('home', homeData)
+          await handleSaveCombined('auto', autoData)
+        }
+        console.log('[ExtractionReview] saveBeforeNavigation completed successfully')
+        return true
+      } catch (error) {
+        console.error('[ExtractionReview] saveBeforeNavigation failed:', error)
+        return false
+      }
+    },
+  }), [quoteType, homeData, autoData, handleSaveHome, handleSaveAuto, handleSaveCombined])
+
   // Render content based on quote type
   const renderContent = () => {
     switch (quoteType) {
@@ -232,4 +269,4 @@ export function ExtractionReview({
       {renderContent()}
     </div>
   )
-}
+})
